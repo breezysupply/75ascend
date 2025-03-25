@@ -22,9 +22,32 @@ export function initializeApp() {
     return;
   }
   
-  // In production, we'll load Amplify dynamically
-  import('aws-amplify').then(amplifyModule => {
+  // In production, we'll load Amplify synchronously to ensure it's available
+  try {
+    // Import Amplify synchronously
+    const amplifyModule = require('aws-amplify');
     Amplify = amplifyModule.Amplify;
+    
+    // Import auth functions synchronously
+    const authModule = require('aws-amplify/auth');
+    fetchAuthSession = authModule.fetchAuthSession;
+    signIn = authModule.signIn;
+    signUp = authModule.signUp;
+    confirmSignUp = authModule.confirmSignUp;
+    signOut = authModule.signOut;
+    
+    // Import DynamoDB modules synchronously
+    const dynamoDBClientModule = require('@aws-sdk/client-dynamodb');
+    DynamoDBClient = dynamoDBClientModule.DynamoDBClient;
+    
+    const dynamoDBDocumentClientModule = require('@aws-sdk/lib-dynamodb');
+    DynamoDBDocumentClient = dynamoDBDocumentClientModule.DynamoDBDocumentClient;
+    GetCommand = dynamoDBDocumentClientModule.GetCommand;
+    PutCommand = dynamoDBDocumentClientModule.PutCommand;
+    
+    // Initialize DynamoDB client
+    dynamoClient = new DynamoDBClient({ region: "us-east-1" });
+    docClient = DynamoDBDocumentClient.from(dynamoClient);
     
     // Configure Amplify with your Cognito User Pool details
     Amplify.configure({
@@ -43,37 +66,9 @@ export function initializeApp() {
     });
     
     console.log('AWS Amplify initialized with Cognito User Pool');
-    
-    // Now load the other AWS dependencies
-    Promise.all([
-      import('aws-amplify/auth'),
-      import('@aws-sdk/client-dynamodb'),
-      import('@aws-sdk/lib-dynamodb')
-    ]).then(([authModule, dynamoDBClientModule, dynamoDBDocumentClientModule]) => {
-      // Set up auth functions
-      fetchAuthSession = authModule.fetchAuthSession;
-      signIn = authModule.signIn;
-      signUp = authModule.signUp;
-      confirmSignUp = authModule.confirmSignUp;
-      signOut = authModule.signOut;
-      
-      // Set up DynamoDB
-      DynamoDBClient = dynamoDBClientModule.DynamoDBClient;
-      DynamoDBDocumentClient = dynamoDBDocumentClientModule.DynamoDBDocumentClient;
-      GetCommand = dynamoDBDocumentClientModule.GetCommand;
-      PutCommand = dynamoDBDocumentClientModule.PutCommand;
-      
-      // Initialize DynamoDB client
-      dynamoClient = new DynamoDBClient({ region: "us-east-1" });
-      docClient = DynamoDBDocumentClient.from(dynamoClient);
-      
-      console.log('AWS dependencies loaded successfully');
-    }).catch(error => {
-      console.error('Error loading AWS dependencies:', error);
-    });
-  }).catch(error => {
-    console.error('Error loading Amplify:', error);
-  });
+  } catch (error) {
+    console.error('Error initializing AWS Amplify:', error);
+  }
 }
 
 const TABLE_NAME = "75ascend-user-data"; // Your DynamoDB table name
@@ -209,6 +204,11 @@ export const dataService = {
         console.log('Development mode: Simulating successful sign-up');
         localStorage.setItem('75ascend-dev-auth', JSON.stringify({ email, needsConfirmation: true }));
         return { success: true, user: { username: email } };
+      }
+      
+      // Make sure signUp is defined
+      if (!signUp) {
+        throw new Error('Authentication not initialized properly');
       }
       
       const result = await signUp({
