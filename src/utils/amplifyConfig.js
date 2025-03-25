@@ -72,25 +72,42 @@ export async function initializeApp() {
           Cognito: {
             userPoolId: 'us-east-1_ylst7UO8Z',
             userPoolClientId: '31gir3ub0es6l03j3vkah2jbnf',
-            identityPoolId: 'us-east-1:73439648-aa6e-4041-8d98-8faf35d7219e', // Add your Identity Pool ID here
+            identityPoolId: 'us-east-1:73439648-aa6e-4041-8d98-8faf35d7219e',
             region: 'us-east-1',
             loginWith: {
-              email: true
+              email: true,
+              oauth: {
+                domain: '75-ascend-user.auth.us-east-1.amazoncognito.com',
+                scope: ['email', 'profile', 'openid'],
+                redirectSignIn: ['https://main.d1oas7a4pwxwes.amplifyapp.com'],
+                redirectSignOut: ['https://main.d1oas7a4pwxwes.amplifyapp.com'],
+                responseType: 'code'
+              }
             }
           }
         }
       });
       
       // Initialize DynamoDB client with credentials from Cognito Identity Pool
-      const session = await fetchAuthSession();
-      const credentials = session.credentials;
-      
-      dynamoClient = new DynamoDBClient({ 
-        region: "us-east-1",
-        credentials: credentials
-      });
-      
-      docClient = DynamoDBDocumentClient.from(dynamoClient);
+      try {
+        const session = await fetchAuthSession();
+        
+        if (!session.credentials) {
+          console.error('No credentials available in the session');
+          throw new Error('No credentials available');
+        }
+        
+        dynamoClient = new DynamoDBClient({ 
+          region: "us-east-1",
+          credentials: session.credentials
+        });
+        
+        docClient = DynamoDBDocumentClient.from(dynamoClient);
+        console.log('DynamoDB client initialized successfully');
+      } catch (credError) {
+        console.error('Error getting credentials for DynamoDB:', credError);
+        throw credError;
+      }
       
       console.log('AWS Amplify initialized with Cognito User Pool and DynamoDB');
       isAmplifyInitialized = true;
@@ -340,32 +357,43 @@ export const dataService = {
   
   getCurrentUser: async () => {
     try {
-      // In development, return simulated user
+      // In development, return a mock user
       if (isDevelopment) {
-        console.log('Development mode: Returning simulated user');
-        const auth = JSON.parse(localStorage.getItem('75ascend-dev-auth') || '{}');
-        if (auth.email) {
-          return { sub: 'dev-user-id', email: auth.email };
-        }
-        return null;
+        console.log('Development mode: Returning mock user');
+        return { sub: 'dev-user-123', email: 'dev@example.com' };
       }
       
       await ensureAmplifyInitialized();
       
       try {
         const session = await fetchAuthSession();
-        if (session.tokens) {
-          const idToken = session.tokens.idToken;
-          return {
-            sub: idToken.payload.sub,
-            email: idToken.payload.email
-          };
+        
+        if (!session.tokens) {
+          console.log('No tokens in session');
+          return null;
         }
+        
+        // Get user info from the ID token
+        const idToken = session.tokens.idToken;
+        const payload = idToken.payload;
+        
+        return {
+          sub: payload.sub,
+          email: payload.email,
+          // Add any other user attributes you need
+        };
       } catch (error) {
-        console.log('No active session:', error);
+        console.error('Error getting current user:', error);
+        
+        // If there's an authentication error, return null instead of throwing
+        if (error.message.includes('not authenticated') || 
+            error.message.includes('No current user') ||
+            error.message.includes('not from a supported provider')) {
+          return null;
+        }
+        
+        throw error;
       }
-      
-      return null;
     } catch (error) {
       console.error('Error getting current user:', error);
       return null;
