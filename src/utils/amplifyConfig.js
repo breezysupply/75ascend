@@ -272,57 +272,53 @@ export const dataService = {
       
       console.log('Attempting to sign in user:', username);
       
-      // Sign in the user with SECRET_HASH if client secret is provided
-      const signInParams = { username, password };
-      
-      // If we have a client secret, we need to compute the SECRET_HASH
-      if (CLIENT_SECRET) {
-        try {
-          // We'll need to import crypto-js for this
-          const CryptoJS = await import('crypto-js');
-          const message = username + CLIENT_ID;
-          const hash = CryptoJS.HmacSHA256(message, CLIENT_SECRET);
-          const hashBase64 = CryptoJS.enc.Base64.stringify(hash);
-          
-          // Add the SECRET_HASH to the sign-in parameters
-          signInParams.options = {
-            authFlowType: 'USER_PASSWORD_AUTH',
-            clientMetadata: {
-              SECRET_HASH: hashBase64
-            }
-          };
-        } catch (cryptoError) {
-          console.error('Error computing SECRET_HASH:', cryptoError);
+      // Sign in the user with regular parameters first
+      const signInParams = { 
+        username, 
+        password,
+        options: {
+          authFlowType: 'USER_PASSWORD_AUTH'
         }
-      }
+      };
       
       // Sign in with the parameters
-      const result = await signIn(signInParams);
-      console.log('Sign in successful, getting session...');
-      
-      // Wait a moment to ensure credentials are propagated
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Explicitly fetch the session to ensure credentials are available
-      const session = await fetchAuthSession({ forceRefresh: true });
-      console.log('Session obtained:', session ? 'Yes' : 'No');
-      
-      if (!session || !session.tokens) {
-        console.error('No session or tokens after sign in');
-        throw new Error('Authentication failed - no session available');
-      }
-      
-      console.log('User authenticated successfully');
-      
-      // Initialize DynamoDB with the new credentials
       try {
-        await initializeDynamoDB();
-      } catch (dbError) {
-        console.warn('DynamoDB initialization failed, but user is authenticated:', dbError);
-        // Continue anyway since the user is authenticated
+        const result = await signIn(signInParams);
+        console.log('Sign in successful, getting session...');
+        
+        // Wait a moment to ensure credentials are propagated
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Explicitly fetch the session to ensure credentials are available
+        const session = await fetchAuthSession({ forceRefresh: true });
+        console.log('Session obtained:', session ? 'Yes' : 'No');
+        
+        if (!session || !session.tokens) {
+          console.error('No session or tokens after sign in');
+          throw new Error('Authentication failed - no session available');
+        }
+        
+        console.log('User authenticated successfully');
+        
+        // Initialize DynamoDB with the new credentials
+        try {
+          await initializeDynamoDB();
+        } catch (dbError) {
+          console.warn('DynamoDB initialization failed, but user is authenticated:', dbError);
+          // Continue anyway since the user is authenticated
+        }
+        
+        return result;
+      } catch (signInError) {
+        // If the error is about SECRET_HASH, we need to modify the app client in AWS Console
+        if (signInError.message && signInError.message.includes('SECRET_HASH')) {
+          console.error('Authentication requires SECRET_HASH. Please update your Cognito app client to not require a client secret.');
+          throw new Error('Authentication configuration error: Client secret is required but not properly configured. Please contact support.');
+        }
+        
+        // For other errors, just rethrow
+        throw signInError;
       }
-      
-      return result;
     } catch (error) {
       console.error('Error signing in:', error);
       throw error;

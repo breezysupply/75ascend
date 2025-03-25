@@ -17,6 +17,7 @@
     "astro": "^5.5.4",
     "aws-amplify": "^6.13.6",
     "canvas-confetti": "^1.9.3",
+    "crypto-js": "^4.2.0",
     "html2canvas": "^1.4.1",
     "openid-client": "^6.3.4",
     "react": "^19.0.0",
