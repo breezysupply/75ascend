@@ -19,14 +19,50 @@ initializeApp();
     
     if (!isDevelopment) {
       // In production, check authentication
+      let redirectAttempts = 0;
+      const MAX_REDIRECT_ATTEMPTS = 3;
+      
+      // Store a flag in sessionStorage to prevent infinite redirects
+      if (sessionStorage.getItem('redirectAttempt')) {
+        redirectAttempts = parseInt(sessionStorage.getItem('redirectAttempt'));
+        if (redirectAttempts >= MAX_REDIRECT_ATTEMPTS) {
+          console.error('Too many redirect attempts, staying on current page');
+          sessionStorage.removeItem('redirectAttempt');
+          // Show an error message to the user
+          const errorDiv = document.createElement('div');
+          errorDiv.className = 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mt-4 mx-4';
+          errorDiv.innerHTML = `
+            <strong class="font-bold">Authentication Error!</strong>
+            <span class="block sm:inline"> There was a problem with authentication. Please try signing out and back in.</span>
+            <button class="mt-2 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" onclick="window.location.href='/login'">
+              Go to Login
+            </button>
+          `;
+          document.body.prepend(errorDiv);
+          // Don't attempt to check auth again
+          return;
+        }
+      }
+      
+      // Increment the redirect attempt counter
+      sessionStorage.setItem('redirectAttempt', (redirectAttempts + 1).toString());
+      
+      // In production, check authentication
       import('aws-amplify/auth').then(({ fetchAuthSession }) => {
         fetchAuthSession().then(session => {
           if (!session.tokens) {
             window.location.href = '/login';
+          } else {
+            // Authentication successful, clear the redirect counter
+            sessionStorage.removeItem('redirectAttempt');
           }
         }).catch(() => {
           window.location.href = '/login';
         });
+      }).catch(error => {
+        console.error('Failed to import auth module:', error);
+        // Don't redirect if we can't even load the auth module
+        sessionStorage.removeItem('redirectAttempt');
       });
     } else {
       console.log('Development mode: Skipping authentication check');

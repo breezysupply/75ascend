@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Initialize AWS Amplify
@@ -25,36 +26,11 @@ export default function Dashboard() {
     // Load user data
     const loadUserData = async () => {
       try {
-        // Use the dataService to get user data from DynamoDB
-        const userData = await dataService.getUserData();
-        if (userData) {
-          setUserData(userData);
-        } else {
-          // If no data exists, create default data
-          const defaultData = {
-            currentDay: 1,
-            startDate: new Date().toISOString(),
-            history: [],
-            dailyLogs: []
-          };
-          setUserData(defaultData);
-          await dataService.saveUserData(defaultData);
-        }
-      } catch (error) {
-        console.error('Error loading user data:', error);
-        
-        // Fallback to localStorage for development/testing
-        const storedData = localStorage.getItem('75ascend-data');
-        if (storedData) {
-          setUserData(JSON.parse(storedData));
-        } else {
-          setUserData({
-            currentDay: 1,
-            startDate: new Date().toISOString(),
-            history: [],
-            dailyLogs: []
-          });
-        }
+        const data = await dataService.getUserData();
+        setUserData(data);
+      } catch (err) {
+        console.error('Error loading user data:', err);
+        setError('Failed to load dashboard data. Please try refreshing the page.');
       } finally {
         setLoading(false);
       }
@@ -97,10 +73,36 @@ export default function Dashboard() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await dataService.signOut();
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-2xl font-bold dark:text-white">Loading...</div>
+      <div className="flex justify-center items-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 my-4">
+        <p className="text-red-700 dark:text-red-400">{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-2 px-4 py-2 bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-700"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -203,6 +205,13 @@ export default function Dashboard() {
       ) : (
         <Rules />
       )}
+
+      <button 
+        onClick={handleSignOut}
+        className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+      >
+        Sign Out
+      </button>
     </div>
   );
 } 
