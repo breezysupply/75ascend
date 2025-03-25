@@ -1,41 +1,108 @@
-import { Amplify, Auth } from 'aws-amplify';
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+// Check if we're in a development environment
+const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
 
-// Initialize DynamoDB client
-const dynamoClient = new DynamoDBClient({ region: "us-east-1" });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const TABLE_NAME = "75ascend-user-data"; // Your DynamoDB table name
+// Only import AWS dependencies if not in development mode
+let Amplify, fetchAuthSession, signIn, signUp, confirmSignUp, signOut;
+let DynamoDBClient, DynamoDBDocumentClient, GetCommand, PutCommand;
+let dynamoClient, docClient;
 
+// Create mock implementations for development
+const createDefaultData = () => ({
+  currentDay: 1,
+  startDate: new Date().toISOString(),
+  history: [],
+  dailyLogs: []
+});
+
+// This function will be called by the Astro pages
 export function initializeApp() {
-  // Configure Amplify with your Cognito User Pool details
-  Amplify.configure({
-    Auth: {
-      region: 'us-east-1', // Replace with your region if different
-      userPoolId: 'us-east-1_yLst7UDB2', // From your screenshot
-      userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5', // From your screenshot
-      oauth: {
-        domain: 'd841iy8p4kdic.cloudfront.net', // From your screenshot
-        scope: ['email', 'profile', 'openid'],
-        redirectSignIn: 'https://d841iy8p4kdic.cloudfront.net', // Update with your app URL
-        redirectSignOut: 'https://d841iy8p4kdic.cloudfront.net', // Update with your app URL
-        responseType: 'code'
-      }
-    },
-    identityPoolId: 'YOUR_IDENTITY_POOL_ID', // Create an identity pool in Cognito
-    identityPoolRegion: 'us-east-1'
-  });
+  // Skip Amplify configuration in development mode
+  if (isDevelopment) {
+    console.log('Development mode: Skipping AWS Amplify configuration');
+    return;
+  }
   
-  console.log('AWS Amplify initialized with Cognito User Pool');
+  // In production, we'll load Amplify dynamically
+  import('aws-amplify').then(amplifyModule => {
+    Amplify = amplifyModule.Amplify;
+    
+    // Configure Amplify with your Cognito User Pool details
+    Amplify.configure({
+      Auth: {
+        region: 'us-east-1',
+        userPoolId: 'us-east-1_yLst7UDB2',
+        userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5',
+        oauth: {
+          domain: 'd841iy8p4kdic.cloudfront.net',
+          scope: ['email', 'profile', 'openid'],
+          redirectSignIn: 'https://d841iy8p4kdic.cloudfront.net',
+          redirectSignOut: 'https://main.d1oas7a4pwxwes.amplifyapp.com',
+          responseType: 'code'
+        }
+      }
+    });
+    
+    console.log('AWS Amplify initialized with Cognito User Pool');
+    
+    // Now load the other AWS dependencies
+    Promise.all([
+      import('aws-amplify/auth'),
+      import('@aws-sdk/client-dynamodb'),
+      import('@aws-sdk/lib-dynamodb')
+    ]).then(([authModule, dynamoDBClientModule, dynamoDBDocumentClientModule]) => {
+      // Set up auth functions
+      fetchAuthSession = authModule.fetchAuthSession;
+      signIn = authModule.signIn;
+      signUp = authModule.signUp;
+      confirmSignUp = authModule.confirmSignUp;
+      signOut = authModule.signOut;
+      
+      // Set up DynamoDB
+      DynamoDBClient = dynamoDBClientModule.DynamoDBClient;
+      DynamoDBDocumentClient = dynamoDBDocumentClientModule.DynamoDBDocumentClient;
+      GetCommand = dynamoDBDocumentClientModule.GetCommand;
+      PutCommand = dynamoDBDocumentClientModule.PutCommand;
+      
+      // Initialize DynamoDB client
+      dynamoClient = new DynamoDBClient({ region: "us-east-1" });
+      docClient = DynamoDBDocumentClient.from(dynamoClient);
+      
+      console.log('AWS dependencies loaded successfully');
+    }).catch(error => {
+      console.error('Error loading AWS dependencies:', error);
+    });
+  }).catch(error => {
+    console.error('Error loading Amplify:', error);
+  });
 }
 
-// Replace mock implementations with actual AWS Auth calls and DynamoDB operations
+const TABLE_NAME = "75ascend-user-data"; // Your DynamoDB table name
+
+// Replace with the correct Auth methods for AWS Amplify v6+
 export const dataService = {
   getUserData: async () => {
     try {
+      // In development, just use localStorage
+      if (isDevelopment) {
+        console.log('Development mode: Using localStorage instead of DynamoDB');
+        const data = localStorage.getItem('75ascend-data');
+        if (data) {
+          return JSON.parse(data);
+        }
+        
+        // Create default data if none exists
+        const defaultData = createDefaultData();
+        localStorage.setItem('75ascend-data', JSON.stringify(defaultData));
+        return defaultData;
+      }
+      
       // First check if user is authenticated
-      const user = await Auth.currentAuthenticatedUser();
-      const userId = user.attributes.sub;
+      const session = await fetchAuthSession();
+      const userId = session.tokens?.idToken?.payload?.sub;
+      
+      if (!userId) {
+        throw new Error('No authenticated user');
+      }
       
       // Fetch user data from DynamoDB
       const command = new GetCommand({
@@ -53,12 +120,7 @@ export const dataService = {
       }
       
       // If no data exists yet, return default data structure
-      const defaultData = {
-        currentDay: 1,
-        startDate: new Date().toISOString(),
-        history: [],
-        dailyLogs: []
-      };
+      const defaultData = createDefaultData();
       
       // Save default data to DynamoDB
       await dataService.saveUserData(defaultData);
@@ -69,15 +131,33 @@ export const dataService = {
       
       // Fallback to localStorage for development/testing
       const data = localStorage.getItem('75ascend-data');
-      return data ? JSON.parse(data) : null;
+      if (data) {
+        return JSON.parse(data);
+      }
+      
+      // Create default data if none exists
+      const defaultData = createDefaultData();
+      localStorage.setItem('75ascend-data', JSON.stringify(defaultData));
+      return defaultData;
     }
   },
   
   saveUserData: async (data) => {
     try {
+      // In development, just use localStorage
+      if (isDevelopment) {
+        console.log('Development mode: Using localStorage instead of DynamoDB');
+        localStorage.setItem('75ascend-data', JSON.stringify(data));
+        return data;
+      }
+      
       // First check if user is authenticated
-      const user = await Auth.currentAuthenticatedUser();
-      const userId = user.attributes.sub;
+      const session = await fetchAuthSession();
+      const userId = session.tokens?.idToken?.payload?.sub;
+      
+      if (!userId) {
+        throw new Error('No authenticated user');
+      }
       
       // Save to DynamoDB
       const command = new PutCommand({
@@ -101,14 +181,21 @@ export const dataService = {
       // Fallback to localStorage for development/testing
       localStorage.setItem('75ascend-data', JSON.stringify(data));
       
-      throw error;
+      return data;
     }
   },
   
   signIn: async (email, password) => {
     try {
-      const user = await Auth.signIn(email, password);
-      return { success: true, user };
+      // In development, simulate successful sign-in
+      if (isDevelopment) {
+        console.log('Development mode: Simulating successful sign-in');
+        localStorage.setItem('75ascend-dev-auth', JSON.stringify({ email }));
+        return { success: true, user: { username: email } };
+      }
+      
+      const result = await signIn({ username: email, password });
+      return { success: true, user: result };
     } catch (error) {
       console.error('Error signing in:', error);
       throw error;
@@ -117,14 +204,21 @@ export const dataService = {
   
   signUp: async (email, password) => {
     try {
-      const { user } = await Auth.signUp({
+      // In development, simulate successful sign-up
+      if (isDevelopment) {
+        console.log('Development mode: Simulating successful sign-up');
+        localStorage.setItem('75ascend-dev-auth', JSON.stringify({ email, needsConfirmation: true }));
+        return { success: true, user: { username: email } };
+      }
+      
+      const result = await signUp({
         username: email,
         password,
         attributes: {
           email
         }
       });
-      return { success: true, user };
+      return { success: true, user: result };
     } catch (error) {
       console.error('Error signing up:', error);
       throw error;
@@ -133,7 +227,19 @@ export const dataService = {
   
   confirmSignUp: async (email, code) => {
     try {
-      await Auth.confirmSignUp(email, code);
+      // In development, simulate successful confirmation
+      if (isDevelopment) {
+        console.log('Development mode: Simulating successful confirmation');
+        const auth = JSON.parse(localStorage.getItem('75ascend-dev-auth') || '{}');
+        auth.needsConfirmation = false;
+        localStorage.setItem('75ascend-dev-auth', JSON.stringify(auth));
+        return { success: true };
+      }
+      
+      await confirmSignUp({
+        username: email,
+        confirmationCode: code
+      });
       return { success: true };
     } catch (error) {
       console.error('Error confirming sign up:', error);
@@ -143,7 +249,14 @@ export const dataService = {
   
   signOut: async () => {
     try {
-      await Auth.signOut();
+      // In development, simulate successful sign-out
+      if (isDevelopment) {
+        console.log('Development mode: Simulating successful sign-out');
+        localStorage.removeItem('75ascend-dev-auth');
+        return { success: true };
+      }
+      
+      await signOut();
       return { success: true };
     } catch (error) {
       console.error('Error signing out:', error);
@@ -153,8 +266,18 @@ export const dataService = {
   
   getCurrentUser: async () => {
     try {
-      const user = await Auth.currentAuthenticatedUser();
-      return user;
+      // In development, return simulated user
+      if (isDevelopment) {
+        console.log('Development mode: Returning simulated user');
+        const auth = JSON.parse(localStorage.getItem('75ascend-dev-auth') || '{}');
+        if (auth.email) {
+          return { sub: 'dev-user-id', email: auth.email };
+        }
+        return null;
+      }
+      
+      const session = await fetchAuthSession();
+      return session.tokens?.idToken?.payload;
     } catch (error) {
       console.error('No authenticated user:', error);
       return null;

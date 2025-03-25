@@ -25,7 +25,25 @@ export default function Dashboard() {
     // Load user data
     const loadUserData = async () => {
       try {
-        // This would be replaced with actual data fetching from AWS
+        // Use the dataService to get user data from DynamoDB
+        const userData = await dataService.getUserData();
+        if (userData) {
+          setUserData(userData);
+        } else {
+          // If no data exists, create default data
+          const defaultData = {
+            currentDay: 1,
+            startDate: new Date().toISOString(),
+            history: [],
+            dailyLogs: []
+          };
+          setUserData(defaultData);
+          await dataService.saveUserData(defaultData);
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        
+        // Fallback to localStorage for development/testing
         const storedData = localStorage.getItem('75ascend-data');
         if (storedData) {
           setUserData(JSON.parse(storedData));
@@ -37,8 +55,6 @@ export default function Dashboard() {
             dailyLogs: []
           });
         }
-      } catch (error) {
-        console.error('Error loading user data:', error);
       } finally {
         setLoading(false);
       }
@@ -47,10 +63,17 @@ export default function Dashboard() {
     loadUserData();
   }, []);
 
-  const saveUserData = (data) => {
-    // This would be replaced with actual data saving to AWS
-    localStorage.setItem('75ascend-data', JSON.stringify(data));
-    setUserData(data);
+  const saveUserData = async (data) => {
+    try {
+      // Use the dataService to save user data to DynamoDB
+      await dataService.saveUserData(data);
+      setUserData(data);
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      // Fallback to localStorage for development/testing
+      localStorage.setItem('75ascend-data', JSON.stringify(data));
+      setUserData(data);
+    }
   };
   
   const toggleDarkMode = () => {

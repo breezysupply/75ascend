@@ -1,11 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { dataService } from '../utils/amplifyConfig';
 
-export default function History({ userData, saveUserData }) {
+export default function History() {
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   
+  useEffect(() => {
+    // Load user data when component mounts
+    const loadUserData = async () => {
+      try {
+        const data = await dataService.getUserData();
+        setUserData(data);
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadUserData();
+  }, []);
+  
+  const saveUserData = async (data) => {
+    try {
+      await dataService.saveUserData(data);
+      setUserData(data);
+    } catch (error) {
+      console.error('Error saving user data:', error);
+    }
+  };
+  
   const handleReset = () => {
-    if (confirmText !== 'RESET') return;
+    if (!userData || confirmText !== 'RESET') return;
     
     // Add current progress to history as failed
     const startDate = new Date(userData.startDate);
@@ -16,16 +44,17 @@ export default function History({ userData, saveUserData }) {
       ...userData,
       currentDay: 1,
       startDate: new Date().toISOString(),
-      dailyLogs: [],
       history: [
         ...userData.history,
         {
-          startDate: startDate.toISOString(),
+          startDate: userData.startDate,
           endDate: endDate.toISOString(),
-          status: 'FAILED',
-          days: daysDifference
+          daysCompleted: daysDifference,
+          status: 'failed',
+          notes: 'Challenge reset manually'
         }
-      ]
+      ],
+      dailyLogs: []
     };
     
     saveUserData(updatedUserData);
@@ -33,77 +62,90 @@ export default function History({ userData, saveUserData }) {
     setConfirmText('');
   };
   
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (!userData) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md">
+        <p className="text-center text-gray-700 dark:text-gray-300">
+          No challenge data found. Start a new challenge from the dashboard.
+        </p>
+      </div>
+    );
+  }
+  
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-4 dark:text-white">Your Progress History</h2>
-      
-      {/* Current Progress */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6 border dark:border-gray-700">
-        <h3 className="font-medium text-lg dark:text-white">Current Challenge</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Started: {formatDate(userData.startDate)}</p>
-        <p className="mt-2 dark:text-white">Day {userData.currentDay} of 75</p>
-        <div className="mt-3 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-          <div 
-            className="bg-primary dark:bg-blue-500 h-2.5 rounded-full" 
-            style={{ width: `${(userData.currentDay / 75) * 100}%` }}
-          ></div>
-        </div>
+    <div className="space-y-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md">
+        <h2 className="text-xl font-semibold mb-4 dark:text-white">Current Challenge</h2>
+        <p className="text-gray-700 dark:text-gray-300">
+          <strong>Start Date:</strong> {new Date(userData.startDate).toLocaleDateString()}
+        </p>
+        <p className="text-gray-700 dark:text-gray-300">
+          <strong>Current Day:</strong> {userData.currentDay}
+        </p>
       </div>
       
-      {/* Past Attempts */}
-      {userData.history.length > 0 ? (
-        <div className="space-y-4">
-          <h3 className="font-medium dark:text-white">Past Attempts</h3>
-          {userData.history.map((attempt, index) => (
-            <div key={index} className="bg-white dark:bg-gray-800 rounded-lg p-4 border dark:border-gray-700">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm dark:text-gray-300">
-                    {formatDate(attempt.startDate)} - {formatDate(attempt.endDate)}
+      {userData.history && userData.history.length > 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md">
+          <h2 className="text-xl font-semibold mb-4 dark:text-white">Previous Attempts</h2>
+          <div className="space-y-4">
+            {userData.history.map((attempt, index) => (
+              <div key={index} className="border-b pb-4 dark:border-gray-700 last:border-0">
+                <p className="text-gray-700 dark:text-gray-300">
+                  <strong>Dates:</strong> {new Date(attempt.startDate).toLocaleDateString()} - {new Date(attempt.endDate).toLocaleDateString()}
+                </p>
+                <p className="text-gray-700 dark:text-gray-300">
+                  <strong>Days Completed:</strong> {attempt.daysCompleted}
+                </p>
+                <p className="text-gray-700 dark:text-gray-300">
+                  <strong>Status:</strong> <span className={attempt.status === 'completed' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>{attempt.status}</span>
+                </p>
+                {attempt.notes && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <strong>Notes:</strong> {attempt.notes}
                   </p>
-                  <p className={`font-medium mt-1 ${attempt.status === 'SUCCESS' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {attempt.status}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Days completed</p>
-                  <p className="font-medium dark:text-white">{attempt.days}</p>
-                </div>
+                )}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : (
-        <p className="text-gray-500 dark:text-gray-400 text-center py-6">No previous attempts yet</p>
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md">
+          <p className="text-center text-gray-700 dark:text-gray-300">
+            No previous challenge attempts found.
+          </p>
+        </div>
       )}
       
-      {/* Reset Button */}
-      <div className="mt-8 border-t dark:border-gray-700 pt-6">
-        <h3 className="font-medium text-red-600 dark:text-red-400 mb-2">Danger Zone</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md">
+        <h2 className="text-xl font-semibold mb-4 text-red-600 dark:text-red-400">Reset Challenge</h2>
+        <p className="text-gray-700 dark:text-gray-300 mb-4">
+          This will reset your current challenge progress and add it to your history as a failed attempt.
+        </p>
+        
         {showResetConfirm ? (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <p className="text-sm text-red-700 dark:text-red-300 mb-3">
-              This will mark your current progress as FAILED and reset to day 1. Type RESET to confirm.
+          <div className="space-y-4">
+            <p className="text-gray-700 dark:text-gray-300">
+              Type <strong>RESET</strong> to confirm:
             </p>
             <input
               type="text"
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="Type RESET to confirm"
-              className="w-full p-2 border rounded mb-2 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+              className="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
-            <div className="flex gap-2">
+            <div className="flex space-x-4">
               <button
                 onClick={handleReset}
                 disabled={confirmText !== 'RESET'}
-                className={`flex-1 py-2 rounded-lg text-white ${
-                  confirmText === 'RESET' ? 'bg-red-600 dark:bg-red-700' : 'bg-red-300 dark:bg-red-900/50'
-                }`}
+                className="flex-1 py-2 bg-red-600 text-white rounded-lg disabled:opacity-50"
               >
                 Reset Challenge
               </button>

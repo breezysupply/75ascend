@@ -1,9 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Dashboard from '../components/Dashboard';
-import { dataService, initializeApp } from '../utils/amplifyConfig';
+import { initializeApp } from '../utils/amplifyConfig';
 
-// Initialize Amplify
+// Initialize Amplify (this will be a no-op in development)
 initializeApp();
 
 // This check will happen client-side since Astro runs on the server
@@ -14,19 +14,22 @@ initializeApp();
   <Dashboard client:load />
   
   <script>
-    // Check authentication on page load
-    import { Auth } from 'aws-amplify';
+    // Check if we're in development mode
+    const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
     
-    async function checkAuth() {
-      try {
-        await Auth.currentAuthenticatedUser();
-        // User is authenticated, do nothing
-      } catch (error) {
-        // User is not authenticated, redirect to login
-        window.location.href = '/login';
-      }
+    if (!isDevelopment) {
+      // In production, check authentication
+      import('aws-amplify/auth').then(({ fetchAuthSession }) => {
+        fetchAuthSession().then(session => {
+          if (!session.tokens) {
+            window.location.href = '/login';
+          }
+        }).catch(() => {
+          window.location.href = '/login';
+        });
+      });
+    } else {
+      console.log('Development mode: Skipping authentication check');
     }
-    
-    checkAuth();
   </script>
 </Layout> 

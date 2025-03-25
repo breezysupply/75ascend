@@ -1,1 +1,42 @@
- 
+---
+import Layout from '../layouts/Layout.astro';
+import { initializeApp } from '../utils/amplifyConfig';
+
+// Initialize Amplify (this will be a no-op in development)
+initializeApp();
+---
+
+<Layout title="Share - 75 ASCEND">
+  <div class="container mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-6">Share Your Progress</h1>
+    <!-- Share component content here -->
+  </div>
+
+  <script>
+    // Check authentication on page load
+    const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
+    
+    if (!isDevelopment) {
+      // Use a different approach for dynamic imports in Astro scripts
+      const authModule = await import('aws-amplify/auth');
+      const fetchAuthSession = authModule.fetchAuthSession;
+      
+      async function checkAuth() {
+        try {
+          const session = await fetchAuthSession();
+          if (!session.tokens) {
+            throw new Error('No authenticated user');
+          }
+          // User is authenticated, do nothing
+        } catch (error) {
+          // User is not authenticated, redirect to login
+          window.location.href = '/login';
+        }
+      }
+      
+      checkAuth();
+    } else {
+      console.log('Development mode: Skipping authentication check');
+    }
+  </script>
+</Layout> 
