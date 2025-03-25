@@ -70,7 +70,10 @@ export async function initializeApp() {
         Cognito: {
           userPoolId: 'us-east-1_ylst7UO8Z',
           userPoolClientId: 'npcbekf1mfir19g1kfsinmo5',
-          region: 'us-east-1'
+          region: 'us-east-1',
+          loginWith: {
+            email: true
+          }
         }
       }
     });
