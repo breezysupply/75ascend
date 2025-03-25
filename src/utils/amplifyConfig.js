@@ -105,65 +105,74 @@ const ensureAmplifyInitialized = async () => {
 export const dataService = {
   getUserData: async () => {
     try {
-      // In development, just use localStorage
+      // In development, return simulated data
       if (isDevelopment) {
-        console.log('Development mode: Using localStorage instead of DynamoDB');
-        const data = localStorage.getItem('75ascend-data');
-        if (data) {
-          return JSON.parse(data);
+        console.log('Development mode: Returning simulated user data');
+        const savedData = localStorage.getItem('75ascend-data');
+        if (savedData) {
+          return JSON.parse(savedData);
         }
         
-        // Create default data if none exists
-        const defaultData = createDefaultData();
-        localStorage.setItem('75ascend-data', JSON.stringify(defaultData));
-        return defaultData;
+        // Return default data structure for a new user
+        return {
+          currentDay: 1,
+          startDate: new Date().toISOString(),
+          tasks: [],
+          history: []
+        };
       }
       
       await ensureAmplifyInitialized();
       
-      // Get the current user
-      const user = await dataService.getCurrentUser();
-      const userId = user?.sub;
-      
-      if (!userId) {
-        throw new Error('No authenticated user');
-      }
-      
-      // Fetch user data from DynamoDB
-      const command = new GetCommand({
-        TableName: TABLE_NAME,
-        Key: {
-          userId: userId
+      try {
+        // First check if the user is authenticated
+        const user = await dataService.getCurrentUser();
+        if (!user) {
+          throw new Error('User not authenticated');
         }
-      });
-      
-      const response = await docClient.send(command);
-      
-      // If user data exists in DynamoDB, return it
-      if (response.Item) {
-        return response.Item.userData;
+        
+        // Get the user's data from DynamoDB
+        const userId = user.sub;
+        const command = new GetCommand({
+          TableName: TABLE_NAME,
+          Key: { userId }
+        });
+        
+        const response = await docClient.send(command);
+        
+        if (response.Item) {
+          return response.Item.data;
+        } else {
+          // User exists but has no data yet, return default structure
+          return {
+            currentDay: 1,
+            startDate: new Date().toISOString(),
+            tasks: [],
+            history: []
+          };
+        }
+      } catch (error) {
+        console.error('Error getting user data:', error);
+        
+        // If there's a credential error, redirect to login
+        if (error.message.includes('Credential is missing')) {
+          // Clear any auth tokens that might be invalid
+          await dataService.signOut();
+          window.location.href = '/login';
+          return null;
+        }
+        
+        // For other errors, return a default structure
+        return {
+          currentDay: 1,
+          startDate: new Date().toISOString(),
+          tasks: [],
+          history: []
+        };
       }
-      
-      // If no data exists yet, return default data structure
-      const defaultData = createDefaultData();
-      
-      // Save default data to DynamoDB
-      await dataService.saveUserData(defaultData);
-      
-      return defaultData;
     } catch (error) {
       console.error('Error getting user data:', error);
-      
-      // Fallback to localStorage for development/testing
-      const data = localStorage.getItem('75ascend-data');
-      if (data) {
-        return JSON.parse(data);
-      }
-      
-      // Create default data if none exists
-      const defaultData = createDefaultData();
-      localStorage.setItem('75ascend-data', JSON.stringify(defaultData));
-      return defaultData;
+      throw error;
     }
   },
   

@@ -45,6 +45,12 @@ initializeApp();
           }
         }
         
+        // Clear any existing redirect attempts when the page loads fresh
+        // This helps break out of redirect loops
+        if (redirectAttempts === 0) {
+          sessionStorage.removeItem('redirectAttempt');
+        }
+        
         // Increment the redirect attempt counter
         sessionStorage.setItem('redirectAttempt', (redirectAttempts + 1).toString());
         
