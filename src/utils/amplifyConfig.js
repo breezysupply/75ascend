@@ -22,6 +22,7 @@ let isAmplifyInitialized = false;
 const COGNITO_DOMAIN = 'https://75-ascend-user.auth.us-east-1.amazoncognito.com';
 const CLIENT_ID = 'npcbekfimfiri9g1kfsinhmo5'; // Your actual client ID
 const REDIRECT_URI = 'https://main.d1oas7a4pwxwes.amplifyapp.com'; // Your app's URL
+const CLIENT_SECRET = '140usd2lvpsgmtflo3apc38edm3ejr1nplu7jks9njmimnbadvi8'; // Add your actual client secret here
 
 // Update the initializeApp function to separate auth from DynamoDB
 export async function initializeApp() {
@@ -271,26 +272,32 @@ export const dataService = {
       
       console.log('Attempting to sign in user:', username);
       
-      // Fix client ID mismatch - ensure we're using the correct one
-      if (Amplify.getConfig().Auth?.Cognito?.userPoolClientId !== 'npcbekfimfiri9g1kfsinhmo5') {
-        console.warn('Client ID mismatch detected, reconfiguring Amplify');
-        Amplify.configure({
-          Auth: {
-            Cognito: {
-              userPoolId: 'us-east-1_ylst7UO8Z',
-              userPoolClientId: 'npcbekfimfiri9g1kfsinhmo5',
-              identityPoolId: 'us-east-1:73439648-aa6e-4041-8d98-8faf35d7219e',
-              region: 'us-east-1',
-              loginWith: {
-                email: true
-              }
+      // Sign in the user with SECRET_HASH if client secret is provided
+      const signInParams = { username, password };
+      
+      // If we have a client secret, we need to compute the SECRET_HASH
+      if (CLIENT_SECRET) {
+        try {
+          // We'll need to import crypto-js for this
+          const CryptoJS = await import('crypto-js');
+          const message = username + CLIENT_ID;
+          const hash = CryptoJS.HmacSHA256(message, CLIENT_SECRET);
+          const hashBase64 = CryptoJS.enc.Base64.stringify(hash);
+          
+          // Add the SECRET_HASH to the sign-in parameters
+          signInParams.options = {
+            authFlowType: 'USER_PASSWORD_AUTH',
+            clientMetadata: {
+              SECRET_HASH: hashBase64
             }
-          }
-        });
+          };
+        } catch (cryptoError) {
+          console.error('Error computing SECRET_HASH:', cryptoError);
+        }
       }
       
-      // Sign in the user
-      const result = await signIn({ username, password });
+      // Sign in with the parameters
+      const result = await signIn(signInParams);
       console.log('Sign in successful, getting session...');
       
       // Wait a moment to ensure credentials are propagated
