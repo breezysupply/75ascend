@@ -33,7 +33,7 @@ export async function initializeApp() {
   try {
     // Import Amplify dynamically
     const amplifyModule = await import('aws-amplify');
-    Amplify = amplifyModule.Amplify;
+    Amplify = amplifyModule.default;
     
     // Import auth functions dynamically
     const authModule = await import('aws-amplify/auth');
@@ -59,15 +59,13 @@ export async function initializeApp() {
     // Configure Amplify with your Cognito User Pool details
     Amplify.configure({
       Auth: {
-        region: 'us-east-1',
-        userPoolId: 'us-east-1_ylst7UO8Z',
-        userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5',
-        oauth: {
-          domain: 'd841iy8p4kdic.cloudfront.net',
-          scope: ['email', 'profile', 'openid'],
-          redirectSignIn: 'https://d841iy8p4kdic.cloudfront.net',
-          redirectSignOut: 'https://main.d1oas7a4pwxwes.amplifyapp.com',
-          responseType: 'code'
+        Cognito: {
+          userPoolId: 'us-east-1_ylst7UO8Z',
+          userPoolClientId: 'npcbekf1mfir19g1kfsinmo5',
+          identityPoolId: undefined,
+          loginWith: {
+            email: true
+          }
         }
       }
     });
