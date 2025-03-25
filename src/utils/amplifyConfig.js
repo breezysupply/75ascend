@@ -31,9 +31,11 @@ export async function initializeApp() {
   }
   
   try {
+    console.log('Initializing AWS Amplify...');
+    
     // Import Amplify dynamically
     const amplifyModule = await import('aws-amplify');
-    Amplify = amplifyModule.default;
+    Amplify = amplifyModule.Amplify;
     
     // Import auth functions dynamically
     const authModule = await import('aws-amplify/auth');
@@ -57,16 +59,12 @@ export async function initializeApp() {
     docClient = DynamoDBDocumentClient.from(dynamoClient);
     
     // Configure Amplify with your Cognito User Pool details
+    // This is the direct Amplify configuration, not using OpenID Connect
     Amplify.configure({
       Auth: {
-        Cognito: {
-          userPoolId: 'us-east-1_ylst7UO8Z',
-          userPoolClientId: 'npcbekf1mfir19g1kfsinmo5',
-          identityPoolId: undefined,
-          loginWith: {
-            email: true
-          }
-        }
+        region: 'us-east-1',
+        userPoolId: 'us-east-1_ylst7UO8Z',
+        userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5'
       }
     });
     
@@ -74,6 +72,7 @@ export async function initializeApp() {
     isAmplifyInitialized = true;
   } catch (error) {
     console.error('Error initializing AWS Amplify:', error);
+    console.error('Error details:', error.stack);
   }
 }
 
@@ -214,7 +213,9 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
+      console.log('Signing in with:', { username: email });
       const result = await signIn({ username: email, password });
+      console.log('Sign in result:', result);
       return { success: true, user: result };
     } catch (error) {
       console.error('Error signing in:', error);
@@ -233,6 +234,7 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
+      console.log('Signing up with:', { username: email });
       const result = await signUp({
         username: email,
         password,
@@ -240,6 +242,7 @@ export const dataService = {
           email
         }
       });
+      console.log('Sign up result:', result);
       return { success: true, user: result };
     } catch (error) {
       console.error('Error signing up:', error);
@@ -260,6 +263,7 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
+      console.log('Confirming sign up:', { username: email, code });
       await confirmSignUp({
         username: email,
         confirmationCode: code
