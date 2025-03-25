@@ -1,16 +1,32 @@
 ---
+import Layout from '../layouts/Layout.astro';
+import Dashboard from '../components/Dashboard';
+import { dataService, initializeApp } from '../utils/amplifyConfig';
 
+// Initialize Amplify
+initializeApp();
+
+// This check will happen client-side since Astro runs on the server
+// and Auth needs to run in the browser
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<Layout title="75 ASCEND">
+  <Dashboard client:load />
+  
+  <script>
+    // Check authentication on page load
+    import { Auth } from 'aws-amplify';
+    
+    async function checkAuth() {
+      try {
+        await Auth.currentAuthenticatedUser();
+        // User is authenticated, do nothing
+      } catch (error) {
+        // User is not authenticated, redirect to login
+        window.location.href = '/login';
+      }
+    }
+    
+    checkAuth();
+  </script>
+</Layout> 

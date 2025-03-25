@@ -1,0 +1,31 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content="75 ASCEND - A transformative 75-day challenge to forge discipline and elevate your mental and physical capabilities" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <script>
+      // On page load, check for dark mode preference
+      if (localStorage.getItem('75ascend-darkmode') === 'true') {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+  </head>
+  <body class="text-text min-h-screen dark:text-gray-100">
+    <slot />
+  </body>
+</html> 
