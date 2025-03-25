@@ -9,4 +9,9 @@ export default defineConfig({
     react(),
     tailwind(),
   ],
+  output: 'static',
+  site: 'https://ascend-bd295.web.app',
+  build: {
+    assets: 'astro'
+  }
 });

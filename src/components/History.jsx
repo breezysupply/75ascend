@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { dataService } from '../utils/amplifyConfig';
+import { dataService } from '../utils/firebaseConfig';
 
 export default function History() {
   const [userData, setUserData] = useState(null);

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import DailyChecklist from './DailyChecklist';
 import History from './History';
 import Rules from './Rules';
-import { initializeApp, dataService } from '../utils/amplifyConfig';
+import { initializeApp, dataService } from '../utils/firebaseConfig';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('checklist');

@@ -1,9 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Dashboard from '../components/Dashboard';
-import { initializeApp } from '../utils/amplifyConfig';
+import { initializeApp } from '../utils/firebaseConfig';
 
-// Initialize Amplify (this will be a no-op in development)
+// Initialize Firebase
 initializeApp();
 
 // This check will happen client-side since Astro runs on the server
