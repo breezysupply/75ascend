@@ -8,7 +8,7 @@ export default function Rules() {
       <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border dark:border-gray-700">
         <h3 className="font-medium text-lg mb-3 dark:text-white">Program Overview</h3>
         <p className="text-gray-700 dark:text-gray-300 mb-4">
-          Welcome to 75 Ascend, a transformative program designed to forge unwavering discipline and elevate your mental and physical capabilities. This is a no-excuses challenge, engineered to push your boundaries and redefine your limits.
+          Welcome to 75 Ascend, a transformative program designed to forge unwavering discipline and elevate your mental and physical capabilities. This is a no-excuses challenge, engineered to push beyond your boundaries and redefine your limits.
         </p>
         <p className="text-gray-700 dark:text-gray-300">
           There are zero exceptions, zero compromises, and zero second chances. Either you follow the rules completely, or you start over.
@@ -32,6 +32,7 @@ export default function Rules() {
         <ul className="list-disc pl-5 space-y-2 text-gray-700 dark:text-gray-300">
           <li>Follow any diet of your choosing</li>
           <li>This includes specific dietary plans (keto, vegan, paleo, etc.) or self-imposed restrictions (no processed sugar, no fast food, etc.)</li>
+          <li>Absolutely NO alcohol consumption</li>
           <li>Zero cheat meals or exceptions</li>
         </ul>
       </div>

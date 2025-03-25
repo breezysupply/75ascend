@@ -16,8 +16,8 @@ let DynamoDBClient, DynamoDBDocumentClient, GetCommand, PutCommand;
 let dynamoClient, docClient;
 
 // Update these values with your actual Cognito settings
-const COGNITO_DOMAIN = 'https://your-domain.auth.us-east-1.amazoncognito.com';
-const CLIENT_ID = 'npcbekfimfiri9g1kfsinhmo5'; // Your actual client ID
+const COGNITO_DOMAIN = 'https://75-ascend-user.auth.us-east-1.amazoncognito.com';
+const CLIENT_ID = 'npcbekf1mfir19g1kfsinmo5'; // Your actual client ID
 const REDIRECT_URI = 'https://main.d1oas7a4pwxwes.amplifyapp.com'; // Your app's URL
 
 // This function will be called by the Astro pages
@@ -36,8 +36,17 @@ export async function initializeApp() {
   try {
     console.log('Initializing authentication...');
     
-    // Import OpenID Connect client
-    const { Issuer } = await import('openid-client');
+    // Import AWS Amplify dynamically
+    const amplifyModule = await import('aws-amplify');
+    const Amplify = amplifyModule.Amplify;
+    
+    // Import auth functions dynamically
+    const authModule = await import('aws-amplify/auth');
+    const fetchAuthSession = authModule.fetchAuthSession;
+    const signIn = authModule.signIn;
+    const signUp = authModule.signUp;
+    const confirmSignUp = authModule.confirmSignUp;
+    const signOut = authModule.signOut;
     
     // Import DynamoDB modules dynamically
     const dynamoDBClientModule = await import('@aws-sdk/client-dynamodb');
@@ -52,14 +61,13 @@ export async function initializeApp() {
     dynamoClient = new DynamoDBClient({ region: "us-east-1" });
     docClient = DynamoDBDocumentClient.from(dynamoClient);
     
-    // Discover the OpenID Connect issuer
-    const issuer = await Issuer.discover(COGNITO_DOMAIN);
-    
-    // Create a client
-    authClient = new issuer.Client({
-      client_id: CLIENT_ID,
-      redirect_uris: [REDIRECT_URI],
-      response_types: ['code']
+    // Configure Amplify with your Cognito User Pool details
+    Amplify.configure({
+      Auth: {
+        region: 'us-east-1',
+        userPoolId: 'us-east-1_ylst7UO8Z',
+        userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5'
+      }
     });
     
     console.log('Authentication initialized with Cognito User Pool');
@@ -207,16 +215,8 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
-      // Redirect to the Cognito hosted UI for sign-in
-      const authUrl = authClient.authorizationUrl({
-        scope: 'openid email profile',
-        state: crypto.randomUUID(), // Generate a random state
-        nonce: crypto.randomUUID(), // Generate a random nonce
-        redirect_uri: REDIRECT_URI
-      });
-      
-      window.location.href = authUrl;
-      return { success: true };
+      const result = await signIn({ username: email, password });
+      return { success: true, user: result };
     } catch (error) {
       console.error('Error signing in:', error);
       throw error;
@@ -237,17 +237,16 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
-      // Redirect to the Cognito hosted UI for sign-up
-      const authUrl = authClient.authorizationUrl({
-        scope: 'openid email profile',
-        state: crypto.randomUUID(), // Generate a random state
-        nonce: crypto.randomUUID(), // Generate a random nonce
-        redirect_uri: REDIRECT_URI,
-        prompt: 'create'
+      console.log('Signing up with:', { username: email });
+      const result = await signUp({
+        username: email,
+        password,
+        attributes: {
+          email
+        }
       });
       
-      window.location.href = authUrl;
-      return { success: true };
+      return { success: true, user: result.user };
     } catch (error) {
       console.error('Error signing up:', error);
       throw error;
