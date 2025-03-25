@@ -23,7 +23,7 @@ const COGNITO_DOMAIN = 'https://75-ascend-user.auth.us-east-1.amazoncognito.com'
 const CLIENT_ID = '31gir3ub0es6l03j3vkah2jbnf'; // Your actual client ID
 const REDIRECT_URI = 'https://main.d1oas7a4pwxwes.amplifyapp.com'; // Your app's URL
 
-// This function will be called by the Astro pages
+// Update the initializeApp function to use static imports
 export async function initializeApp() {
   // Skip Amplify configuration in development mode
   if (isDevelopment) {
@@ -39,58 +39,40 @@ export async function initializeApp() {
   try {
     console.log('Initializing AWS Amplify...');
     
-    // Import Amplify dynamically with error handling
-    let amplifyModule;
+    // Import Amplify modules statically
     try {
-      amplifyModule = await import('aws-amplify');
-      Amplify = amplifyModule.Amplify;
-    } catch (importError) {
-      console.error('Failed to import AWS Amplify:', importError);
-      // Continue with other imports to see if they work
-    }
-    
-    // Import auth functions dynamically with error handling
-    let authModule;
-    try {
-      authModule = await import('aws-amplify/auth');
+      // Use a more reliable import approach
+      const { Amplify: AmplifyModule } = await import('aws-amplify');
+      Amplify = AmplifyModule;
+      
+      const authModule = await import('aws-amplify/auth');
       fetchAuthSession = authModule.fetchAuthSession;
       signIn = authModule.signIn;
       signUp = authModule.signUp;
       confirmSignUp = authModule.confirmSignUp;
       signOut = authModule.signOut;
-    } catch (importError) {
-      console.error('Failed to import auth module:', importError);
-      // Continue with other imports
-    }
-    
-    // Only proceed with DynamoDB setup if auth was successful
-    if (authModule) {
-      try {
-        // Import DynamoDB modules dynamically
-        const dynamoDBClientModule = await import('@aws-sdk/client-dynamodb');
-        DynamoDBClient = dynamoDBClientModule.DynamoDBClient;
-        
-        const dynamoDBDocumentClientModule = await import('@aws-sdk/lib-dynamodb');
-        DynamoDBDocumentClient = dynamoDBDocumentClientModule.DynamoDBDocumentClient;
-        GetCommand = dynamoDBDocumentClientModule.GetCommand;
-        PutCommand = dynamoDBDocumentClientModule.PutCommand;
-        
-        // Initialize DynamoDB client
-        dynamoClient = new DynamoDBClient({ region: "us-east-1" });
-        docClient = DynamoDBDocumentClient.from(dynamoClient);
-      } catch (importError) {
-        console.error('Failed to import DynamoDB modules:', importError);
-      }
-    }
-    
-    // Only configure Amplify if it was successfully imported
-    if (Amplify) {
-      // Configure Amplify with your Cognito User Pool details
+      
+      // Import DynamoDB modules
+      const { DynamoDBClient: DDBClient } = await import('@aws-sdk/client-dynamodb');
+      DynamoDBClient = DDBClient;
+      
+      const { 
+        DynamoDBDocumentClient: DDBDocClient,
+        GetCommand: GetCmd,
+        PutCommand: PutCmd
+      } = await import('@aws-sdk/lib-dynamodb');
+      
+      DynamoDBDocumentClient = DDBDocClient;
+      GetCommand = GetCmd;
+      PutCommand = PutCmd;
+      
+      // Configure Amplify with your Cognito User Pool and Identity Pool
       Amplify.configure({
         Auth: {
           Cognito: {
             userPoolId: 'us-east-1_ylst7UO8Z',
             userPoolClientId: '31gir3ub0es6l03j3vkah2jbnf',
+            identityPoolId: 'us-east-1:73439648-aa6e-4041-8d98-8faf35d7219e', // Add your Identity Pool ID here
             region: 'us-east-1',
             loginWith: {
               email: true
@@ -99,12 +81,27 @@ export async function initializeApp() {
         }
       });
       
-      console.log('AWS Amplify initialized with Cognito User Pool');
+      // Initialize DynamoDB client with credentials from Cognito Identity Pool
+      const session = await fetchAuthSession();
+      const credentials = session.credentials;
+      
+      dynamoClient = new DynamoDBClient({ 
+        region: "us-east-1",
+        credentials: credentials
+      });
+      
+      docClient = DynamoDBDocumentClient.from(dynamoClient);
+      
+      console.log('AWS Amplify initialized with Cognito User Pool and DynamoDB');
       isAmplifyInitialized = true;
+    } catch (importError) {
+      console.error('Failed to import AWS modules:', importError);
+      throw importError;
     }
   } catch (error) {
     console.error('Error initializing AWS Amplify:', error);
     console.error('Error details:', error);
+    throw error;
   }
 }
 
@@ -220,7 +217,7 @@ export const dataService = {
         TableName: TABLE_NAME,
         Item: {
           userId: userId,
-          userData: data,
+          data: data,
           updatedAt: new Date().toISOString()
         }
       });
