@@ -39,47 +39,69 @@ export async function initializeApp() {
   try {
     console.log('Initializing AWS Amplify...');
     
-    // Import Amplify dynamically
-    const amplifyModule = await import('aws-amplify');
-    Amplify = amplifyModule.Amplify;
+    // Import Amplify dynamically with error handling
+    let amplifyModule;
+    try {
+      amplifyModule = await import('aws-amplify');
+      Amplify = amplifyModule.Amplify;
+    } catch (importError) {
+      console.error('Failed to import AWS Amplify:', importError);
+      // Continue with other imports to see if they work
+    }
     
-    // Import auth functions dynamically
-    const authModule = await import('aws-amplify/auth');
-    fetchAuthSession = authModule.fetchAuthSession;
-    signIn = authModule.signIn;
-    signUp = authModule.signUp;
-    confirmSignUp = authModule.confirmSignUp;
-    signOut = authModule.signOut;
+    // Import auth functions dynamically with error handling
+    let authModule;
+    try {
+      authModule = await import('aws-amplify/auth');
+      fetchAuthSession = authModule.fetchAuthSession;
+      signIn = authModule.signIn;
+      signUp = authModule.signUp;
+      confirmSignUp = authModule.confirmSignUp;
+      signOut = authModule.signOut;
+    } catch (importError) {
+      console.error('Failed to import auth module:', importError);
+      // Continue with other imports
+    }
     
-    // Import DynamoDB modules dynamically
-    const dynamoDBClientModule = await import('@aws-sdk/client-dynamodb');
-    DynamoDBClient = dynamoDBClientModule.DynamoDBClient;
+    // Only proceed with DynamoDB setup if auth was successful
+    if (authModule) {
+      try {
+        // Import DynamoDB modules dynamically
+        const dynamoDBClientModule = await import('@aws-sdk/client-dynamodb');
+        DynamoDBClient = dynamoDBClientModule.DynamoDBClient;
+        
+        const dynamoDBDocumentClientModule = await import('@aws-sdk/lib-dynamodb');
+        DynamoDBDocumentClient = dynamoDBDocumentClientModule.DynamoDBDocumentClient;
+        GetCommand = dynamoDBDocumentClientModule.GetCommand;
+        PutCommand = dynamoDBDocumentClientModule.PutCommand;
+        
+        // Initialize DynamoDB client
+        dynamoClient = new DynamoDBClient({ region: "us-east-1" });
+        docClient = DynamoDBDocumentClient.from(dynamoClient);
+      } catch (importError) {
+        console.error('Failed to import DynamoDB modules:', importError);
+      }
+    }
     
-    const dynamoDBDocumentClientModule = await import('@aws-sdk/lib-dynamodb');
-    DynamoDBDocumentClient = dynamoDBDocumentClientModule.DynamoDBDocumentClient;
-    GetCommand = dynamoDBDocumentClientModule.GetCommand;
-    PutCommand = dynamoDBDocumentClientModule.PutCommand;
-    
-    // Initialize DynamoDB client
-    dynamoClient = new DynamoDBClient({ region: "us-east-1" });
-    docClient = DynamoDBDocumentClient.from(dynamoClient);
-    
-    // Configure Amplify with your Cognito User Pool details
-    Amplify.configure({
-      Auth: {
-        Cognito: {
-          userPoolId: 'us-east-1_ylst7UO8Z',
-          userPoolClientId: '31gir3ub0es6l03j3vkah2jbnf',
-          region: 'us-east-1',
-          loginWith: {
-            email: true
+    // Only configure Amplify if it was successfully imported
+    if (Amplify) {
+      // Configure Amplify with your Cognito User Pool details
+      Amplify.configure({
+        Auth: {
+          Cognito: {
+            userPoolId: 'us-east-1_ylst7UO8Z',
+            userPoolClientId: '31gir3ub0es6l03j3vkah2jbnf',
+            region: 'us-east-1',
+            loginWith: {
+              email: true
+            }
           }
         }
-      }
-    });
-    
-    console.log('AWS Amplify initialized with Cognito User Pool');
-    isAmplifyInitialized = true;
+      });
+      
+      console.log('AWS Amplify initialized with Cognito User Pool');
+      isAmplifyInitialized = true;
+    }
   } catch (error) {
     console.error('Error initializing AWS Amplify:', error);
     console.error('Error details:', error);
@@ -114,15 +136,16 @@ export const dataService = {
         }
         
         // Return default data structure for a new user
-        return {
-          currentDay: 1,
-          startDate: new Date().toISOString(),
-          tasks: [],
-          history: []
-        };
+        return createDefaultData();
       }
       
-      await ensureAmplifyInitialized();
+      // If we can't initialize Amplify, return default data
+      try {
+        await ensureAmplifyInitialized();
+      } catch (error) {
+        console.error('Failed to initialize Amplify:', error);
+        return createDefaultData();
+      }
       
       try {
         // First check if the user is authenticated
@@ -144,35 +167,32 @@ export const dataService = {
           return response.Item.data;
         } else {
           // User exists but has no data yet, return default structure
-          return {
-            currentDay: 1,
-            startDate: new Date().toISOString(),
-            tasks: [],
-            history: []
-          };
+          return createDefaultData();
         }
       } catch (error) {
         console.error('Error getting user data:', error);
         
         // If there's a credential error, redirect to login
-        if (error.message.includes('Credential is missing')) {
+        if (error.message.includes('Credential is missing') || 
+            error.message.includes('not initialized properly')) {
           // Clear any auth tokens that might be invalid
-          await dataService.signOut();
+          try {
+            await dataService.signOut();
+          } catch (signOutError) {
+            console.error('Error during sign out:', signOutError);
+          }
+          
+          // Redirect to login page
           window.location.href = '/login';
           return null;
         }
         
         // For other errors, return a default structure
-        return {
-          currentDay: 1,
-          startDate: new Date().toISOString(),
-          tasks: [],
-          history: []
-        };
+        return createDefaultData();
       }
     } catch (error) {
       console.error('Error getting user data:', error);
-      throw error;
+      return createDefaultData(); // Return default data instead of throwing
     }
   },
   
