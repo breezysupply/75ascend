@@ -73,15 +73,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleSignOut = async () => {
-    try {
-      await dataService.signOut();
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">
@@ -205,13 +196,6 @@ export default function Dashboard() {
       ) : (
         <Rules />
       )}
-
-      <button 
-        onClick={handleSignOut}
-        className="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-      >
-        Sign Out
-      </button>
     </div>
   );
 } 
