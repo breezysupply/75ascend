@@ -20,7 +20,7 @@ let isAmplifyInitialized = false;
 
 // Update these values with your actual Cognito settings
 const COGNITO_DOMAIN = 'https://75-ascend-user.auth.us-east-1.amazoncognito.com';
-const CLIENT_ID = 'npcbekfimfiri9g1kfsinhmo5'; // Your actual client ID
+const CLIENT_ID = '31gir3ub0es6l03j3vkah2jbnf'; // Your actual client ID
 const REDIRECT_URI = 'https://main.d1oas7a4pwxwes.amplifyapp.com'; // Your app's URL
 
 // This function will be called by the Astro pages
@@ -69,7 +69,7 @@ export async function initializeApp() {
       Auth: {
         Cognito: {
           userPoolId: 'us-east-1_ylst7UO8Z',
-          userPoolClientId: 'npcbekfimfiri9g1kfsinhmo5',
+          userPoolClientId: '31gir3ub0es6l03j3vkah2jbnf',
           region: 'us-east-1',
           loginWith: {
             email: true
