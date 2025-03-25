@@ -59,13 +59,11 @@ export async function initializeApp() {
     docClient = DynamoDBDocumentClient.from(dynamoClient);
     
     // Configure Amplify with your Cognito User Pool details
-    // This is the direct Amplify configuration, not using OpenID Connect
-    Amplify.configure({
-      Auth: {
-        region: 'us-east-1',
-        userPoolId: 'us-east-1_ylst7UO8Z',
-        userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5'
-      }
+    // Using a simpler configuration format
+    await authModule.configureAuth({
+      userPoolId: 'us-east-1_ylst7UO8Z',
+      userPoolClientId: 'npcbekf1mfir19g1kfsinmo5',
+      region: 'us-east-1'
     });
     
     console.log('AWS Amplify initialized with Cognito User Pool');
@@ -235,11 +233,13 @@ export const dataService = {
       await ensureAuthInitialized();
       
       console.log('Signing up with:', { username: email });
-      const result = await signUp({
-        username: email,
+      const result = await signUp({ 
+        username: email, 
         password,
-        attributes: {
-          email
+        options: {
+          userAttributes: {
+            email
+          }
         }
       });
       console.log('Sign up result:', result);
