@@ -20,10 +20,10 @@ let isAmplifyInitialized = false;
 
 // Update these values with your actual Cognito settings
 const COGNITO_DOMAIN = 'https://75-ascend-user.auth.us-east-1.amazoncognito.com';
-const CLIENT_ID = '31gir3ub0es6l03j3vkah2jbnf'; // Your actual client ID
+const CLIENT_ID = 'npcbekfimfiri9g1kfsinhmo5'; // Your actual client ID
 const REDIRECT_URI = 'https://main.d1oas7a4pwxwes.amplifyapp.com'; // Your app's URL
 
-// Update the initializeApp function to use static imports
+// Update the initializeApp function to separate auth from DynamoDB
 export async function initializeApp() {
   // Skip Amplify configuration in development mode
   if (isDevelopment) {
@@ -75,41 +75,13 @@ export async function initializeApp() {
             identityPoolId: 'us-east-1:73439648-aa6e-4041-8d98-8faf35d7219e',
             region: 'us-east-1',
             loginWith: {
-              email: true,
-              oauth: {
-                domain: '75-ascend-user.auth.us-east-1.amazoncognito.com',
-                scope: ['email', 'profile', 'openid'],
-                redirectSignIn: ['https://main.d1oas7a4pwxwes.amplifyapp.com'],
-                redirectSignOut: ['https://main.d1oas7a4pwxwes.amplifyapp.com'],
-                responseType: 'code'
-              }
+              email: true
             }
           }
         }
       });
       
-      // Initialize DynamoDB client with credentials from Cognito Identity Pool
-      try {
-        const session = await fetchAuthSession();
-        
-        if (!session.credentials) {
-          console.error('No credentials available in the session');
-          throw new Error('No credentials available');
-        }
-        
-        dynamoClient = new DynamoDBClient({ 
-          region: "us-east-1",
-          credentials: session.credentials
-        });
-        
-        docClient = DynamoDBDocumentClient.from(dynamoClient);
-        console.log('DynamoDB client initialized successfully');
-      } catch (credError) {
-        console.error('Error getting credentials for DynamoDB:', credError);
-        throw credError;
-      }
-      
-      console.log('AWS Amplify initialized with Cognito User Pool and DynamoDB');
+      console.log('AWS Amplify initialized with Cognito User Pool');
       isAmplifyInitialized = true;
     } catch (importError) {
       console.error('Failed to import AWS modules:', importError);
@@ -119,6 +91,34 @@ export async function initializeApp() {
     console.error('Error initializing AWS Amplify:', error);
     console.error('Error details:', error);
     throw error;
+  }
+}
+
+// Add a new function to initialize DynamoDB after authentication
+async function initializeDynamoDB() {
+  if (isDevelopment) return;
+  
+  if (dynamoClient) return; // Already initialized
+  
+  try {
+    const session = await fetchAuthSession();
+    
+    if (!session.credentials) {
+      console.error('No credentials available in the session');
+      throw new Error('No credentials available');
+    }
+    
+    dynamoClient = new DynamoDBClient({ 
+      region: "us-east-1",
+      credentials: session.credentials
+    });
+    
+    docClient = DynamoDBDocumentClient.from(dynamoClient);
+    console.log('DynamoDB client initialized successfully');
+    return true;
+  } catch (credError) {
+    console.error('Error getting credentials for DynamoDB:', credError);
+    throw credError;
   }
 }
 
@@ -167,6 +167,9 @@ export const dataService = {
         if (!user) {
           throw new Error('User not authenticated');
         }
+        
+        // Initialize DynamoDB on demand
+        await initializeDynamoDB();
         
         // Get the user's data from DynamoDB
         const userId = user.sub;
@@ -255,24 +258,64 @@ export const dataService = {
     }
   },
   
-  signIn: async (email, password) => {
+  signIn: async (username, password) => {
     try {
-      // In development, simulate successful sign-in
+      // In development, simulate a successful sign-in
       if (isDevelopment) {
-        console.log('Development mode: Simulating successful sign-in');
-        localStorage.setItem('75ascend-dev-auth', JSON.stringify({ email }));
-        return { success: true, user: { username: email } };
+        console.log('Development mode: Simulating sign-in');
+        localStorage.setItem('75ascend-auth', JSON.stringify({ username }));
+        return { username };
       }
       
       await ensureAmplifyInitialized();
       
-      console.log('Signing in with:', { username: email });
-      const result = await signIn({
-        username: email,
-        password
-      });
+      console.log('Attempting to sign in user:', username);
       
-      return { success: true, user: result };
+      // Fix client ID mismatch - ensure we're using the correct one
+      if (Amplify.getConfig().Auth?.Cognito?.userPoolClientId !== 'npcbekfimfiri9g1kfsinhmo5') {
+        console.warn('Client ID mismatch detected, reconfiguring Amplify');
+        Amplify.configure({
+          Auth: {
+            Cognito: {
+              userPoolId: 'us-east-1_ylst7UO8Z',
+              userPoolClientId: 'npcbekfimfiri9g1kfsinhmo5',
+              identityPoolId: 'us-east-1:73439648-aa6e-4041-8d98-8faf35d7219e',
+              region: 'us-east-1',
+              loginWith: {
+                email: true
+              }
+            }
+          }
+        });
+      }
+      
+      // Sign in the user
+      const result = await signIn({ username, password });
+      console.log('Sign in successful, getting session...');
+      
+      // Wait a moment to ensure credentials are propagated
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Explicitly fetch the session to ensure credentials are available
+      const session = await fetchAuthSession({ forceRefresh: true });
+      console.log('Session obtained:', session ? 'Yes' : 'No');
+      
+      if (!session || !session.tokens) {
+        console.error('No session or tokens after sign in');
+        throw new Error('Authentication failed - no session available');
+      }
+      
+      console.log('User authenticated successfully');
+      
+      // Initialize DynamoDB with the new credentials
+      try {
+        await initializeDynamoDB();
+      } catch (dbError) {
+        console.warn('DynamoDB initialization failed, but user is authenticated:', dbError);
+        // Continue anyway since the user is authenticated
+      }
+      
+      return result;
     } catch (error) {
       console.error('Error signing in:', error);
       throw error;
