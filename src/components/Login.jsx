@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { dataService } from '../utils/amplifyConfig';
 
 export default function Login() {
@@ -7,9 +7,26 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState('');
+
+  useEffect(() => {
+    async function checkAuthStatus() {
+      try {
+        const user = await dataService.getCurrentUser();
+        if (user) {
+          window.location.href = '/';
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    checkAuthStatus();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
