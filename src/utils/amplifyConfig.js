@@ -14,33 +14,40 @@ const createDefaultData = () => ({
   dailyLogs: []
 });
 
+// Flag to track if Amplify has been initialized
+let isAmplifyInitialized = false;
+
 // This function will be called by the Astro pages
-export function initializeApp() {
+export async function initializeApp() {
   // Skip Amplify configuration in development mode
   if (isDevelopment) {
     console.log('Development mode: Skipping AWS Amplify configuration');
     return;
   }
   
-  // In production, we'll load Amplify synchronously to ensure it's available
+  // If already initialized, don't do it again
+  if (isAmplifyInitialized) {
+    return;
+  }
+  
   try {
-    // Import Amplify synchronously
-    const amplifyModule = require('aws-amplify');
+    // Import Amplify dynamically
+    const amplifyModule = await import('aws-amplify');
     Amplify = amplifyModule.Amplify;
     
-    // Import auth functions synchronously
-    const authModule = require('aws-amplify/auth');
+    // Import auth functions dynamically
+    const authModule = await import('aws-amplify/auth');
     fetchAuthSession = authModule.fetchAuthSession;
     signIn = authModule.signIn;
     signUp = authModule.signUp;
     confirmSignUp = authModule.confirmSignUp;
     signOut = authModule.signOut;
     
-    // Import DynamoDB modules synchronously
-    const dynamoDBClientModule = require('@aws-sdk/client-dynamodb');
+    // Import DynamoDB modules dynamically
+    const dynamoDBClientModule = await import('@aws-sdk/client-dynamodb');
     DynamoDBClient = dynamoDBClientModule.DynamoDBClient;
     
-    const dynamoDBDocumentClientModule = require('@aws-sdk/lib-dynamodb');
+    const dynamoDBDocumentClientModule = await import('@aws-sdk/lib-dynamodb');
     DynamoDBDocumentClient = dynamoDBDocumentClientModule.DynamoDBDocumentClient;
     GetCommand = dynamoDBDocumentClientModule.GetCommand;
     PutCommand = dynamoDBDocumentClientModule.PutCommand;
@@ -66,12 +73,26 @@ export function initializeApp() {
     });
     
     console.log('AWS Amplify initialized with Cognito User Pool');
+    isAmplifyInitialized = true;
   } catch (error) {
     console.error('Error initializing AWS Amplify:', error);
   }
 }
 
 const TABLE_NAME = "75ascend-user-data"; // Your DynamoDB table name
+
+// Helper function to ensure auth is initialized
+const ensureAuthInitialized = async () => {
+  if (isDevelopment) return;
+  
+  if (!isAmplifyInitialized) {
+    await initializeApp();
+  }
+  
+  if (!signUp || !signIn || !confirmSignUp || !signOut || !fetchAuthSession) {
+    throw new Error('Authentication not initialized properly');
+  }
+};
 
 // Replace with the correct Auth methods for AWS Amplify v6+
 export const dataService = {
@@ -90,6 +111,8 @@ export const dataService = {
         localStorage.setItem('75ascend-data', JSON.stringify(defaultData));
         return defaultData;
       }
+      
+      await ensureAuthInitialized();
       
       // First check if user is authenticated
       const session = await fetchAuthSession();
@@ -146,6 +169,8 @@ export const dataService = {
         return data;
       }
       
+      await ensureAuthInitialized();
+      
       // First check if user is authenticated
       const session = await fetchAuthSession();
       const userId = session.tokens?.idToken?.payload?.sub;
@@ -189,6 +214,8 @@ export const dataService = {
         return { success: true, user: { username: email } };
       }
       
+      await ensureAuthInitialized();
+      
       const result = await signIn({ username: email, password });
       return { success: true, user: result };
     } catch (error) {
@@ -206,10 +233,7 @@ export const dataService = {
         return { success: true, user: { username: email } };
       }
       
-      // Make sure signUp is defined
-      if (!signUp) {
-        throw new Error('Authentication not initialized properly');
-      }
+      await ensureAuthInitialized();
       
       const result = await signUp({
         username: email,
@@ -236,6 +260,8 @@ export const dataService = {
         return { success: true };
       }
       
+      await ensureAuthInitialized();
+      
       await confirmSignUp({
         username: email,
         confirmationCode: code
@@ -256,6 +282,8 @@ export const dataService = {
         return { success: true };
       }
       
+      await ensureAuthInitialized();
+      
       await signOut();
       return { success: true };
     } catch (error) {
@@ -275,6 +303,8 @@ export const dataService = {
         }
         return null;
       }
+      
+      await ensureAuthInitialized();
       
       const session = await fetchAuthSession();
       return session.tokens?.idToken?.payload;
