@@ -71,7 +71,7 @@ export async function initializeApp() {
         Auth: {
           Cognito: {
             userPoolId: 'us-east-1_ylst7UO8Z',
-            userPoolClientId: '31gir3ub0es6l03j3vkah2jbnf',
+            userPoolClientId: 'npcbekfimfiri9g1kfsinhmo5',
             identityPoolId: 'us-east-1:73439648-aa6e-4041-8d98-8faf35d7219e',
             region: 'us-east-1',
             loginWith: {
