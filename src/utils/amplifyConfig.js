@@ -1,11 +1,6 @@
 // Check if we're in a development environment
 const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
 
-// Only import AWS dependencies if not in development mode
-let Amplify, fetchAuthSession, signIn, signUp, confirmSignUp, signOut;
-let DynamoDBClient, DynamoDBDocumentClient, GetCommand, PutCommand;
-let dynamoClient, docClient;
-
 // Create mock implementations for development
 const createDefaultData = () => ({
   currentDay: 1,
@@ -14,36 +9,35 @@ const createDefaultData = () => ({
   dailyLogs: []
 });
 
-// Flag to track if Amplify has been initialized
-let isAmplifyInitialized = false;
+// Flag to track if auth client has been initialized
+let isAuthInitialized = false;
+let authClient = null;
+let DynamoDBClient, DynamoDBDocumentClient, GetCommand, PutCommand;
+let dynamoClient, docClient;
+
+// Update these values with your actual Cognito settings
+const COGNITO_DOMAIN = 'https://your-domain.auth.us-east-1.amazoncognito.com';
+const CLIENT_ID = 'npcbekfimfiri9g1kfsinhmo5'; // Your actual client ID
+const REDIRECT_URI = 'https://main.d1oas7a4pwxwes.amplifyapp.com'; // Your app's URL
 
 // This function will be called by the Astro pages
 export async function initializeApp() {
-  // Skip Amplify configuration in development mode
+  // Skip configuration in development mode
   if (isDevelopment) {
-    console.log('Development mode: Skipping AWS Amplify configuration');
+    console.log('Development mode: Skipping AWS configuration');
     return;
   }
   
   // If already initialized, don't do it again
-  if (isAmplifyInitialized) {
+  if (isAuthInitialized) {
     return;
   }
   
   try {
-    console.log('Initializing AWS Amplify...');
+    console.log('Initializing authentication...');
     
-    // Import Amplify dynamically
-    const amplifyModule = await import('aws-amplify');
-    Amplify = amplifyModule.Amplify;
-    
-    // Import auth functions dynamically
-    const authModule = await import('aws-amplify/auth');
-    fetchAuthSession = authModule.fetchAuthSession;
-    signIn = authModule.signIn;
-    signUp = authModule.signUp;
-    confirmSignUp = authModule.confirmSignUp;
-    signOut = authModule.signOut;
+    // Import OpenID Connect client
+    const { Issuer } = await import('openid-client');
     
     // Import DynamoDB modules dynamically
     const dynamoDBClientModule = await import('@aws-sdk/client-dynamodb');
@@ -58,20 +52,20 @@ export async function initializeApp() {
     dynamoClient = new DynamoDBClient({ region: "us-east-1" });
     docClient = DynamoDBDocumentClient.from(dynamoClient);
     
-    // Configure Amplify with your Cognito User Pool details
-    // Using the standard Amplify.configure method
-    Amplify.configure({
-      Auth: {
-        region: 'us-east-1',
-        userPoolId: 'us-east-1_ylst7UO8Z',
-        userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5'
-      }
+    // Discover the OpenID Connect issuer
+    const issuer = await Issuer.discover(COGNITO_DOMAIN);
+    
+    // Create a client
+    authClient = new issuer.Client({
+      client_id: CLIENT_ID,
+      redirect_uris: [REDIRECT_URI],
+      response_types: ['code']
     });
     
-    console.log('AWS Amplify initialized with Cognito User Pool');
-    isAmplifyInitialized = true;
+    console.log('Authentication initialized with Cognito User Pool');
+    isAuthInitialized = true;
   } catch (error) {
-    console.error('Error initializing AWS Amplify:', error);
+    console.error('Error initializing authentication:', error);
     console.error('Error details:', error.stack);
   }
 }
@@ -82,16 +76,16 @@ const TABLE_NAME = "75ascend-user-data"; // Your DynamoDB table name
 const ensureAuthInitialized = async () => {
   if (isDevelopment) return;
   
-  if (!isAmplifyInitialized) {
+  if (!isAuthInitialized) {
     await initializeApp();
   }
   
-  if (!signUp || !signIn || !confirmSignUp || !signOut || !fetchAuthSession) {
+  if (!authClient) {
     throw new Error('Authentication not initialized properly');
   }
 };
 
-// Replace with the correct Auth methods for AWS Amplify v6+
+// Authentication and data service
 export const dataService = {
   getUserData: async () => {
     try {
@@ -111,9 +105,9 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
-      // First check if user is authenticated
-      const session = await fetchAuthSession();
-      const userId = session.tokens?.idToken?.payload?.sub;
+      // Get the current user
+      const user = await dataService.getCurrentUser();
+      const userId = user?.sub;
       
       if (!userId) {
         throw new Error('No authenticated user');
@@ -168,9 +162,9 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
-      // First check if user is authenticated
-      const session = await fetchAuthSession();
-      const userId = session.tokens?.idToken?.payload?.sub;
+      // Get the current user
+      const user = await dataService.getCurrentUser();
+      const userId = user?.sub;
       
       if (!userId) {
         throw new Error('No authenticated user');
@@ -213,10 +207,16 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
-      console.log('Signing in with:', { username: email });
-      const result = await signIn({ username: email, password });
-      console.log('Sign in result:', result);
-      return { success: true, user: result };
+      // Redirect to the Cognito hosted UI for sign-in
+      const authUrl = authClient.authorizationUrl({
+        scope: 'openid email profile',
+        state: crypto.randomUUID(), // Generate a random state
+        nonce: crypto.randomUUID(), // Generate a random nonce
+        redirect_uri: REDIRECT_URI
+      });
+      
+      window.location.href = authUrl;
+      return { success: true };
     } catch (error) {
       console.error('Error signing in:', error);
       throw error;
@@ -228,24 +228,26 @@ export const dataService = {
       // In development, simulate successful sign-up
       if (isDevelopment) {
         console.log('Development mode: Simulating successful sign-up');
-        localStorage.setItem('75ascend-dev-auth', JSON.stringify({ email, needsConfirmation: true }));
-        return { success: true, user: { username: email } };
+        localStorage.setItem('75ascend-dev-auth', JSON.stringify({ 
+          email, 
+          needsConfirmation: true 
+        }));
+        return { success: true };
       }
       
       await ensureAuthInitialized();
       
-      console.log('Signing up with:', { username: email });
-      const result = await signUp({ 
-        username: email, 
-        password,
-        options: {
-          userAttributes: {
-            email
-          }
-        }
+      // Redirect to the Cognito hosted UI for sign-up
+      const authUrl = authClient.authorizationUrl({
+        scope: 'openid email profile',
+        state: crypto.randomUUID(), // Generate a random state
+        nonce: crypto.randomUUID(), // Generate a random nonce
+        redirect_uri: REDIRECT_URI,
+        prompt: 'create'
       });
-      console.log('Sign up result:', result);
-      return { success: true, user: result };
+      
+      window.location.href = authUrl;
+      return { success: true };
     } catch (error) {
       console.error('Error signing up:', error);
       throw error;
@@ -263,13 +265,8 @@ export const dataService = {
         return { success: true };
       }
       
-      await ensureAuthInitialized();
-      
-      console.log('Confirming sign up:', { username: email, code });
-      await confirmSignUp({
-        username: email,
-        confirmationCode: code
-      });
+      // For OpenID Connect, confirmation is typically handled by the hosted UI
+      console.warn('Confirmation is handled by the Cognito hosted UI');
       return { success: true };
     } catch (error) {
       console.error('Error confirming sign up:', error);
@@ -288,7 +285,13 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
-      await signOut();
+      // Redirect to the Cognito sign-out URL
+      const logoutUrl = authClient.endSessionUrl({
+        state: 'some-state',
+        post_logout_redirect_uri: window.location.origin
+      });
+      
+      window.location.href = logoutUrl;
       return { success: true };
     } catch (error) {
       console.error('Error signing out:', error);
@@ -310,8 +313,36 @@ export const dataService = {
       
       await ensureAuthInitialized();
       
-      const session = await fetchAuthSession();
-      return session.tokens?.idToken?.payload;
+      // Check if we have a token in the URL (after redirect from Cognito)
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      
+      if (code) {
+        // Exchange the code for tokens
+        const tokens = await authClient.callback(
+          window.location.origin,
+          { code },
+          { state: params.get('state') }
+        );
+        
+        // Store the tokens
+        localStorage.setItem('75ascend-tokens', JSON.stringify(tokens));
+        
+        // Remove the code from the URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Return the user info from the ID token
+        return tokens.claims();
+      }
+      
+      // Check if we have stored tokens
+      const tokensStr = localStorage.getItem('75ascend-tokens');
+      if (tokensStr) {
+        const tokens = JSON.parse(tokensStr);
+        return tokens.claims();
+      }
+      
+      return null;
     } catch (error) {
       console.error('No authenticated user:', error);
       return null;
