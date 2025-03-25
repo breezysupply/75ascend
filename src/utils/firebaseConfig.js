@@ -21,118 +21,75 @@ const firebaseConfig = {
 };
 
 // Firebase instances
-let firebaseApp;
-let firebaseAuth;
-let firebaseDb;
+let app;
+let auth;
+let db;
 let googleAuthProvider;
-let isFirebaseInitialized = false;
 
 // Initialize Firebase
 export async function initializeApp() {
-  // Skip Firebase configuration in development mode
-  if (isDevelopment) {
-    console.log('Development mode: Skipping Firebase configuration');
-    return;
-  }
-  
-  // If already initialized, don't do it again
-  if (isFirebaseInitialized) {
-    return;
-  }
-  
+  if (typeof window === 'undefined') return; // Skip on server-side
+
   try {
-    console.log('Initializing Firebase...');
-    
-    // Import Firebase modules
     const { initializeApp } = await import('firebase/app');
-    const { getAuth, GoogleAuthProvider, signInWithPopup, signOut: firebaseSignOut } = await import('firebase/auth');
-    const { getFirestore, doc, getDoc, setDoc } = await import('firebase/firestore');
-    
-    // Initialize Firebase
-    firebaseApp = initializeApp(firebaseConfig);
-    firebaseAuth = getAuth(firebaseApp);
-    firebaseDb = getFirestore(firebaseApp);
-    googleAuthProvider = new GoogleAuthProvider();
-    
-    console.log('Firebase initialized successfully');
-    isFirebaseInitialized = true;
+    const { getAuth, GoogleAuthProvider } = await import('firebase/auth');
+    const { getFirestore } = await import('firebase/firestore');
+
+    // Only initialize if not already initialized
+    if (!app) {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      googleAuthProvider = new GoogleAuthProvider();
+    }
+
+    return { app, auth, db };
   } catch (error) {
     console.error('Error initializing Firebase:', error);
     throw error;
   }
 }
 
-// Helper function to ensure Firebase is initialized
-const ensureFirebaseInitialized = async () => {
-  if (isDevelopment) return;
-  
-  if (!isFirebaseInitialized) {
-    await initializeApp();
-  }
-  
-  if (!isFirebaseInitialized) {
-    throw new Error('Firebase not initialized properly');
-  }
-};
-
 // Authentication and data service
 export const dataService = {
+  getCurrentUser: () => {
+    if (typeof window === 'undefined') return null;
+    return auth?.currentUser || null;
+  },
+
+  signIn: async () => {
+    const { signInWithPopup } = await import('firebase/auth');
+    if (!auth || !googleAuthProvider) await initializeApp();
+    return signInWithPopup(auth, googleAuthProvider);
+  },
+
+  signOut: async () => {
+    const { signOut } = await import('firebase/auth');
+    if (!auth) await initializeApp();
+    return signOut(auth);
+  },
+
   getUserData: async () => {
+    if (!auth?.currentUser) return null;
+    
     try {
-      // In development, return simulated data
-      if (isDevelopment) {
-        console.log('Development mode: Returning simulated user data');
-        const savedData = localStorage.getItem('75ascend-data');
-        if (savedData) {
-          return JSON.parse(savedData);
-        }
-        
-        // Return default data structure for a new user
-        return createDefaultData();
+      const { doc, getDoc } = await import('firebase/firestore');
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      
+      if (userDoc.exists()) {
+        return userDoc.data();
       }
       
-      // If we can't initialize Firebase, return default data
-      try {
-        await ensureFirebaseInitialized();
-      } catch (error) {
-        console.error('Failed to initialize Firebase:', error);
-        return createDefaultData();
-      }
-      
-      try {
-        // First check if the user is authenticated
-        const user = await dataService.getCurrentUser();
-        if (!user) {
-          throw new Error('User not authenticated');
-        }
-        
-        // Get the user's data from Firestore
-        const { getDoc, doc } = await import('firebase/firestore');
-        const userDocRef = doc(firebaseDb, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (userDoc.exists()) {
-          return userDoc.data().userData;
-        } else {
-          // User exists but has no data yet, return default structure
-          return createDefaultData();
-        }
-      } catch (error) {
-        console.error('Error getting user data:', error);
-        
-        // If there's an authentication error, redirect to login
-        if (error.message.includes('not authenticated')) {
-          // Redirect to login page
-          window.location.href = '/login';
-          return null;
-        }
-        
-        // For other errors, return default data
-        return createDefaultData();
-      }
+      // Return default data for new users
+      return {
+        currentDay: 1,
+        startDate: new Date().toISOString(),
+        history: [],
+        dailyLogs: []
+      };
     } catch (error) {
-      console.error('Error in getUserData:', error);
-      return createDefaultData();
+      console.error('Error getting user data:', error);
+      throw error;
     }
   },
   
@@ -145,7 +102,7 @@ export const dataService = {
         return true;
       }
       
-      await ensureFirebaseInitialized();
+      await initializeApp();
       
       // Get the current user
       const user = await dataService.getCurrentUser();
@@ -155,7 +112,7 @@ export const dataService = {
       
       // Save the data to Firestore
       const { setDoc, doc } = await import('firebase/firestore');
-      const userDocRef = doc(firebaseDb, 'users', user.uid);
+      const userDocRef = doc(db, 'users', user.uid);
       await setDoc(userDocRef, { userData: data }, { merge: true });
       
       console.log('User data saved successfully');
@@ -166,79 +123,8 @@ export const dataService = {
     }
   },
   
-  signIn: async () => {
-    try {
-      // In development, simulate a successful sign-in
-      if (isDevelopment) {
-        console.log('Development mode: Simulating sign-in');
-        localStorage.setItem('75ascend-auth', JSON.stringify({ email: 'dev@example.com' }));
-        return { email: 'dev@example.com' };
-      }
-      
-      await ensureFirebaseInitialized();
-      
-      console.log('Attempting to sign in with Google');
-      
-      // Sign in with Google popup
-      const { signInWithPopup } = await import('firebase/auth');
-      const result = await signInWithPopup(firebaseAuth, googleAuthProvider);
-      
-      console.log('Sign in successful');
-      return result.user;
-    } catch (error) {
-      console.error('Error signing in:', error);
-      throw error;
-    }
-  },
-  
   signUp: async () => {
     // With Google Auth, sign up is the same as sign in
     return dataService.signIn();
-  },
-  
-  signOut: async () => {
-    try {
-      // In development, clear localStorage auth
-      if (isDevelopment) {
-        console.log('Development mode: Simulating sign out');
-        localStorage.removeItem('75ascend-auth');
-        return true;
-      }
-      
-      await ensureFirebaseInitialized();
-      
-      // Sign out from Firebase
-      const { signOut } = await import('firebase/auth');
-      await signOut(firebaseAuth);
-      
-      console.log('User signed out successfully');
-      return true;
-    } catch (error) {
-      console.error('Error signing out:', error);
-      throw error;
-    }
-  },
-  
-  getCurrentUser: async () => {
-    try {
-      // In development, return a mock user
-      if (isDevelopment) {
-        console.log('Development mode: Returning mock user');
-        const savedAuth = localStorage.getItem('75ascend-auth');
-        if (savedAuth) {
-          const parsedAuth = JSON.parse(savedAuth);
-          return { uid: 'dev-user-123', email: parsedAuth.email };
-        }
-        return null;
-      }
-      
-      await ensureFirebaseInitialized();
-      
-      // Get the current user from Firebase
-      return firebaseAuth.currentUser;
-    } catch (error) {
-      console.error('Error getting current user:', error);
-      return null;
-    }
   }
 }; 

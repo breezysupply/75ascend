@@ -13,21 +13,15 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Initialize AWS Amplify
-    initializeApp();
-    
-    // Check for dark mode preference
-    const isDarkMode = localStorage.getItem('75ascend-darkmode') === 'true';
-    setDarkMode(isDarkMode);
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    }
-    
-    // Load user data
     const loadUserData = async () => {
       try {
+        await initializeApp();
         const data = await dataService.getUserData();
-        setUserData(data);
+        if (data) {
+          setUserData(data);
+        } else {
+          window.location.href = '/login';
+        }
       } catch (err) {
         console.error('Error loading user data:', err);
         setError('Failed to load dashboard data. Please try refreshing the page.');
@@ -96,6 +90,10 @@ export default function Dashboard() {
         </button>
       </div>
     );
+  }
+
+  if (!userData) {
+    return <div>Loading...</div>;
   }
 
   return (

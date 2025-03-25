@@ -13,30 +13,17 @@ initializeApp();
   </div>
 
   <script>
-    // Check authentication on page load
     const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
     
     if (!isDevelopment) {
-      // Use a different approach for dynamic imports in Astro scripts
-      const authModule = await import('aws-amplify/auth');
-      const fetchAuthSession = authModule.fetchAuthSession;
+      const { getAuth, onAuthStateChanged } = await import('firebase/auth');
       
-      async function checkAuth() {
-        try {
-          const session = await fetchAuthSession();
-          if (!session.tokens) {
-            throw new Error('No authenticated user');
-          }
-          // User is authenticated, do nothing
-        } catch (error) {
-          // User is not authenticated, redirect to login
+      const auth = getAuth();
+      onAuthStateChanged(auth, (user) => {
+        if (!user) {
           window.location.href = '/login';
         }
-      }
-      
-      checkAuth();
-    } else {
-      console.log('Development mode: Skipping authentication check');
+      });
     }
   </script>
 </Layout> 
