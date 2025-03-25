@@ -59,11 +59,13 @@ export async function initializeApp() {
     docClient = DynamoDBDocumentClient.from(dynamoClient);
     
     // Configure Amplify with your Cognito User Pool details
-    // Using a simpler configuration format
-    await authModule.configureAuth({
-      userPoolId: 'us-east-1_ylst7UO8Z',
-      userPoolClientId: 'npcbekf1mfir19g1kfsinmo5',
-      region: 'us-east-1'
+    // Using the standard Amplify.configure method
+    Amplify.configure({
+      Auth: {
+        region: 'us-east-1',
+        userPoolId: 'us-east-1_ylst7UO8Z',
+        userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5'
+      }
     });
     
     console.log('AWS Amplify initialized with Cognito User Pool');
