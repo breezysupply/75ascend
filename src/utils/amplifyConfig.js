@@ -60,7 +60,7 @@ export async function initializeApp() {
     Amplify.configure({
       Auth: {
         region: 'us-east-1',
-        userPoolId: 'us-east-1_yLst7UDB2',
+        userPoolId: 'us-east-1_ylst7UO8Z',
         userPoolWebClientId: 'npcbekf1mfir19g1kfsinmo5',
         oauth: {
           domain: 'd841iy8p4kdic.cloudfront.net',
