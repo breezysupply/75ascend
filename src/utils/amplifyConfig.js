@@ -69,7 +69,7 @@ export async function initializeApp() {
       Auth: {
         Cognito: {
           userPoolId: 'us-east-1_ylst7UO8Z',
-          userPoolClientId: 'npcbekf1mfir19g1kfsinmo5',
+          userPoolClientId: 'npcbekfimfiri9g1kfsinhmo5',
           region: 'us-east-1',
           loginWith: {
             email: true
