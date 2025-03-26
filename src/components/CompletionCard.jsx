@@ -1,8 +1,10 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
+import { getRandomQuote } from '../utils/quotes';
 
 export default function CompletionCard({ day, onClose }) {
   const cardRef = useRef(null);
+  const [quote] = useState(getRandomQuote());
   
   const handleShare = async () => {
     if (cardRef.current) {
@@ -38,11 +40,11 @@ export default function CompletionCard({ day, onClose }) {
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-sm w-full overflow-hidden">
         <div 
           ref={cardRef} 
-          className="bg-gradient-to-br from-primary to-secondary p-6 text-white text-center"
+          className="bg-gradient-to-br from-orange-400 via-pink-500 to-purple-600 p-6 text-white text-center"
         >
           <h3 className="text-2xl font-bold mb-2">DAY {day} COMPLETE!</h3>
           <p className="text-lg mb-4">75 ASCEND Challenge</p>
-          <div className="bg-white/20 rounded-lg p-4 mb-4">
+          <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4 mb-4">
             <p className="font-medium">
               {day === 75 
                 ? "CHALLENGE COMPLETED! 🏆" 
@@ -54,21 +56,22 @@ export default function CompletionCard({ day, onClose }) {
                 : `${75 - day} days remaining`}
             </p>
           </div>
-          <p className="text-sm italic">
-            "Discipline equals freedom."
-          </p>
+          <div className="italic text-sm">
+            <p className="mb-1">"{quote.text}"</p>
+            <p className="text-white/80">- {quote.author}</p>
+          </div>
         </div>
         
         <div className="p-4 flex flex-col gap-3 dark:bg-gray-800">
           <button 
             onClick={handleShare}
-            className="bg-primary text-white py-2 rounded-lg font-medium"
+            className="bg-gradient-to-r from-orange-400 to-pink-500 text-white py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
           >
             Share Achievement
           </button>
           <button 
             onClick={onClose}
-            className="border border-gray-300 dark:border-gray-600 py-2 rounded-lg font-medium dark:text-white"
+            className="border border-gray-300 dark:border-gray-600 py-2 rounded-lg font-medium dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             Continue
           </button>

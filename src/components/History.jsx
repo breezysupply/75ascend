@@ -5,6 +5,7 @@ export default function History() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   
   useEffect(() => {
@@ -51,7 +52,6 @@ export default function History() {
           endDate: endDate.toISOString(),
           daysCompleted: daysDifference,
           status: 'failed',
-          notes: 'Challenge reset manually'
         }
       ],
       dailyLogs: []
@@ -62,10 +62,22 @@ export default function History() {
     setConfirmText('');
   };
   
+  const handleClearHistory = async () => {
+    if (!userData) return;
+    
+    const updatedUserData = {
+      ...userData,
+      history: []
+    };
+    
+    await saveUserData(updatedUserData);
+    setShowClearConfirm(false);
+  };
+  
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex justify-center items-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
@@ -169,6 +181,40 @@ export default function History() {
           </button>
         )}
       </div>
+      
+      {userData?.history?.length > 0 && (
+        <button
+          onClick={() => setShowClearConfirm(true)}
+          className="mt-6 text-red-600 dark:text-red-400 text-sm hover:underline"
+        >
+          Clear All History
+        </button>
+      )}
+
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-xl font-bold mb-4">Clear History</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">
+              Are you sure you want to clear all history? This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleClearHistory}
+                className="flex-1 bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700"
+              >
+                Clear History
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 border border-gray-300 dark:border-gray-600 py-2 rounded-lg font-medium dark:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
