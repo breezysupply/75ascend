@@ -10,21 +10,28 @@ export default function Login() {
       setLoading(true);
       setError('');
       console.log('[Login] Starting Google sign in');
+      
+      // Clear any existing state
+      sessionStorage.removeItem('auth_redirect_pending');
+      
       await dataService.signIn();
-      console.log('[Login] Sign in successful');
+      
+      // If we get here, the redirect hasn't happened yet
+      console.log('[Login] Sign in initiated, waiting for redirect');
+      
+      // Set a timeout to reset if redirect doesn't happen
+      setTimeout(() => {
+        const isPendingRedirect = sessionStorage.getItem('auth_redirect_pending');
+        if (isPendingRedirect && window.location.pathname === '/login') {
+          console.log('[Login] Redirect timeout, resetting state');
+          sessionStorage.removeItem('auth_redirect_pending');
+          setLoading(false);
+          setError('Sign in was interrupted. Please try again.');
+        }
+      }, 5000);
     } catch (error) {
-      console.error('[Login] Sign in error:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack
-      });
-      let errorMessage = 'An error occurred during sign in';
-      if (error.code === 'auth/popup-closed-by-user') {
-        errorMessage = 'Sign in was cancelled. Please try again.';
-      } else if (error.code === 'auth/popup-blocked') {
-        errorMessage = 'Pop-up was blocked. Please allow pop-ups and try again.';
-      }
-      setError(errorMessage);
+      console.error('[Login] Sign in error:', error);
+      setError('An error occurred during sign in. Please try again.');
       setLoading(false);
     }
   };
@@ -34,7 +41,7 @@ export default function Login() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Signing in...</p>
+          <p className="mt-4 text-gray-600">Starting sign in...</p>
         </div>
       </div>
     );
@@ -58,7 +65,8 @@ export default function Login() {
 
         <button
           onClick={handleGoogleSignIn}
-          className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={loading}
+          className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           Sign in with Google
         </button>

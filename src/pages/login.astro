@@ -11,7 +11,52 @@ import Login from '../components/Login';
   const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
   
   if (!isDevelopment) {
-    const { handleAuthState } = await import('../utils/firebaseConfig');
-    handleAuthState(true);
+    const init = async () => {
+      try {
+        console.log('[Login] Starting initialization');
+        const { initializeFirebase } = await import('../utils/firebaseConfig');
+        await initializeFirebase();
+        
+        const { getAuth, getRedirectResult, onAuthStateChanged } = await import('firebase/auth');
+        const auth = getAuth();
+
+        // Set up auth state listener
+        onAuthStateChanged(auth, (user) => {
+          if (user) {
+            console.log('[Login] Auth state changed - user signed in:', user.email);
+            window.location.replace('/');
+          }
+        });
+
+        // Check for redirect result
+        console.log('[Login] Checking redirect result');
+        const result = await getRedirectResult(auth);
+        
+        console.log('[Login] Redirect result:', {
+          hasResult: !!result,
+          hasUser: !!result?.user,
+          email: result?.user?.email
+        });
+
+        if (result?.user) {
+          console.log('[Login] Successful redirect sign-in');
+          window.location.replace('/');
+          return;
+        }
+
+      } catch (error) {
+        console.error('[Login] Error during initialization:', error);
+      }
+    };
+    
+    // Run init immediately
+    init();
+
+    // Also run when page becomes visible
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        init();
+      }
+    });
   }
 </script> 

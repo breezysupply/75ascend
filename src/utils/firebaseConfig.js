@@ -12,7 +12,7 @@ const createDefaultData = () => ({
 // Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAUx_UgOzsZRttMjAXwNYMv65_-35lCwLk",
-  authDomain: "ascend-bd295.firebaseapp.com",
+  authDomain: "ascend-bd295.web.app",
   projectId: "ascend-bd295",
   storageBucket: "ascend-bd295.firebasestorage.app",
   messagingSenderId: "764804246454",
@@ -167,21 +167,23 @@ export const dataService = {
     try {
       logDebug('Starting sign in process');
       await initializeFirebase();
-      const { GoogleAuthProvider, signInWithPopup, getAuth } = await import('firebase/auth');
+      const { GoogleAuthProvider, signInWithRedirect, getAuth } = await import('firebase/auth');
       auth = getAuth();
       
-      if (!googleAuthProvider) {
-        logDebug('Creating new GoogleAuthProvider');
-        googleAuthProvider = new GoogleAuthProvider();
-        googleAuthProvider.setCustomParameters({
-          prompt: 'select_account'
-        });
-      }
+      // Always create a new provider instance
+      googleAuthProvider = new GoogleAuthProvider();
       
-      logDebug('Initiating popup sign in');
-      const result = await signInWithPopup(auth, googleAuthProvider);
-      logDebug('Sign in successful', { userId: result.user.uid });
-      return result;
+      // Configure auth persistence
+      const { browserLocalPersistence, setPersistence } = await import('firebase/auth');
+      await setPersistence(auth, browserLocalPersistence);
+      
+      // Simplified OAuth parameters
+      googleAuthProvider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      logDebug('Starting redirect sign-in');
+      await signInWithRedirect(auth, googleAuthProvider);
     } catch (error) {
       logError('Sign in failed', error);
       throw error;
