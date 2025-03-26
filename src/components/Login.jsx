@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { dataService } from '../utils/firebaseConfig';
+import { dataService, mockSignIn, createDefaultData } from '../utils/firebaseConfig';
+
+// Add this line to define isDevelopment
+const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
 
 export default function Login() {
   const [error, setError] = useState('');
@@ -9,7 +12,14 @@ export default function Login() {
     try {
       setLoading(true);
       setError('');
-      console.log('[Login] Starting Google sign in');
+      
+      if (isDevelopment) {
+        console.log('[Login] Development mode: Creating mock user data');
+        const mockData = createDefaultData();
+        localStorage.setItem('75ascend-data', JSON.stringify(mockData));
+        window.location.replace('/');
+        return;
+      }
       
       // Clear any existing state
       sessionStorage.removeItem('auth_redirect_pending');

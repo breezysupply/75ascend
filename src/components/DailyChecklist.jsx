@@ -14,19 +14,18 @@ export default function DailyChecklist({ userData, saveUserData }) {
   });
   const [showCompletionCard, setShowCompletionCard] = useState(false);
 
-  // Check if today's tasks are already completed
-  const today = new Date().toISOString().split('T')[0];
-  const todayLog = userData.dailyLogs.find(log => {
-    const logDate = new Date(log.date).toISOString().split('T')[0];
-    return logDate === today;
-  });
-  
   useEffect(() => {
+    // Find today's log that matches the current day number
+    const today = new Date().toISOString().split('T')[0];
+    const todayLog = userData.dailyLogs.find(log => {
+      const logDate = new Date(log.date).toISOString().split('T')[0];
+      return logDate === today && log.day === userData.currentDay;
+    });
+
     if (todayLog) {
-      // If we have tasks from today, use them regardless of the day number
       setTasks(todayLog.tasks);
     } else {
-      // Only reset tasks if there's no log for today
+      // Reset tasks if no log exists for today's date AND current day number
       setTasks({
         workout1: false,
         workout2: false,
@@ -37,17 +36,17 @@ export default function DailyChecklist({ userData, saveUserData }) {
         photo: false
       });
     }
-  }, [todayLog]);
+  }, [userData.dailyLogs, userData.currentDay]);
 
   const handleTaskToggle = (task) => {
     const newTasks = { ...tasks, [task]: !tasks[task] };
     setTasks(newTasks);
     
-    // Update or create today's log
+    const today = new Date().toISOString().split('T')[0];
     const updatedLogs = [...userData.dailyLogs];
     const todayLogIndex = updatedLogs.findIndex(log => {
       const logDate = new Date(log.date).toISOString().split('T')[0];
-      return logDate === today;
+      return logDate === today && log.day === userData.currentDay;
     });
     
     if (todayLogIndex >= 0) {
@@ -70,30 +69,16 @@ export default function DailyChecklist({ userData, saveUserData }) {
   };
 
   const handleCompleteDay = () => {
-    // Trigger confetti
     confetti({
       particleCount: 100,
       spread: 70,
       origin: { y: 0.6 }
     });
-    
-    // Show completion card
     setShowCompletionCard(true);
   };
-  
+
   const handleCompletionClose = () => {
     setShowCompletionCard(false);
-    
-    // Reset tasks for the new day
-    setTasks({
-      workout1: false,
-      workout2: false,
-      diet: false,
-      reading: false,
-      skill: false,
-      water: false,
-      photo: false
-    });
     
     // Update user data to advance to next day
     const updatedUserData = {

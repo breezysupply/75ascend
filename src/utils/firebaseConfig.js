@@ -2,7 +2,7 @@
 const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
 
 // Create mock implementations for development
-const createDefaultData = () => ({
+export const createDefaultData = () => ({
   currentDay: 1,
   startDate: new Date().toISOString(),
   history: [],
@@ -101,8 +101,27 @@ export function waitForAuthInit() {
   });
 }
 
-// Update handleAuthState to be more robust
-export async function handleAuthState(isLoginPage = false) {
+// Add this mock auth function
+export const mockAuthState = async (isLoginPage = false) => {
+  if (isDevelopment) {
+    const mockData = localStorage.getItem('75ascend-data');
+    if (mockData) {
+      // User is "authenticated" in dev mode
+      return { uid: 'dev-user' };
+    } else if (!isLoginPage) {
+      // No mock data and not on login page - redirect to login
+      window.location.replace('/login');
+      return null;
+    }
+  }
+  return null;
+};
+
+// Update handleAuthState function
+export const handleAuthState = async (isLoginPage = false) => {
+  if (isDevelopment) {
+    return mockAuthState(isLoginPage);
+  }
   if (typeof window === 'undefined') return;
 
   try {
@@ -152,7 +171,7 @@ export async function handleAuthState(isLoginPage = false) {
     logError('Auth state handling failed', error);
     return null;
   }
-}
+};
 
 // Authentication and data service
 export const dataService = {
@@ -215,6 +234,14 @@ export const dataService = {
 
   getUserData: async () => {
     try {
+      if (isDevelopment) {
+        const mockData = localStorage.getItem('75ascend-data');
+        if (mockData) {
+          return JSON.parse(mockData);
+        }
+        return createDefaultData();
+      }
+      
       await initializeFirebase();
       if (!auth?.currentUser) return null;
       
@@ -271,4 +298,19 @@ export const dataService = {
     // With Google Auth, sign up is the same as sign in
     return dataService.signIn();
   }
+};
+
+// Add this near your other development checks
+export const mockSignIn = async () => {
+  if (isDevelopment) {
+    const mockData = {
+      currentDay: 1,
+      startDate: new Date().toISOString(),
+      history: [],
+      dailyLogs: []
+    };
+    localStorage.setItem('75ascend-data', JSON.stringify(mockData));
+    return true;
+  }
+  return false;
 }; 

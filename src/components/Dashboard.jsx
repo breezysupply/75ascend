@@ -4,6 +4,9 @@ import History from './History';
 import Rules from './Rules';
 import { dataService } from '../utils/firebaseConfig';
 
+// Add this line to define isDevelopment
+const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('checklist');
   const [userData, setUserData] = useState(null);
@@ -16,6 +19,16 @@ export default function Dashboard() {
     const loadUserData = async () => {
       try {
         console.log('[Dashboard] Starting dashboard initialization');
+        
+        if (isDevelopment) {
+          const data = await dataService.getUserData();
+          if (data) {
+            console.log('[Dashboard] Development mode: Loading mock data');
+            setUserData(data);
+          }
+          return;
+        }
+
         const { initializeFirebase, handleAuthState } = await import('../utils/firebaseConfig');
         await initializeFirebase();
         
@@ -33,11 +46,7 @@ export default function Dashboard() {
           setUserData(data);
         }
       } catch (err) {
-        console.error('[Dashboard] Error in dashboard initialization:', {
-          message: err.message,
-          code: err.code,
-          stack: err.stack
-        });
+        console.error('[Dashboard] Error in dashboard initialization:', err);
         setError('Failed to load dashboard data. Please try refreshing the page.');
       } finally {
         setLoading(false);

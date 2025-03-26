@@ -51,7 +51,7 @@ export default function History() {
           startDate: userData.startDate,
           endDate: endDate.toISOString(),
           daysCompleted: daysDifference,
-          status: 'failed',
+          status: 'FAILED!',
         }
       ],
       dailyLogs: []
