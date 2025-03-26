@@ -1,9 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { initializeApp } from '../utils/firebaseConfig';
+import { initializeFirebase } from '../utils/firebaseConfig';
 
 // Initialize Firebase
-initializeApp();
+await initializeFirebase();
 ---
 
 <Layout title="Share - 75 ASCEND">

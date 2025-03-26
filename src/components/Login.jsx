@@ -1,38 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { dataService } from '../utils/firebaseConfig';
 
 export default function Login() {
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function checkAuthStatus() {
-      try {
-        const user = await dataService.getCurrentUser();
-        if (user) {
-          window.location.href = '/';
-        }
-      } catch (error) {
-        console.error('Error checking auth status:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    checkAuthStatus();
-  }, []);
+  const [loading, setLoading] = useState(false);
 
   const handleGoogleSignIn = async () => {
     try {
+      setLoading(true);
+      setError('');
+      console.log('[Login] Starting Google sign in');
       await dataService.signIn();
-      window.location.href = '/';
+      console.log('[Login] Sign in successful');
     } catch (error) {
-      setError(error.message || 'An error occurred');
+      console.error('[Login] Sign in error:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      let errorMessage = 'An error occurred during sign in';
+      if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Sign in was cancelled. Please try again.';
+      } else if (error.code === 'auth/popup-blocked') {
+        errorMessage = 'Pop-up was blocked. Please allow pop-ups and try again.';
+      }
+      setError(errorMessage);
+      setLoading(false);
     }
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Signing in...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

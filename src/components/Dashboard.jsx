@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import DailyChecklist from './DailyChecklist';
 import History from './History';
 import Rules from './Rules';
-import { initializeApp, dataService } from '../utils/firebaseConfig';
+import { dataService } from '../utils/firebaseConfig';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('checklist');
@@ -15,15 +15,29 @@ export default function Dashboard() {
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        await initializeApp();
+        console.log('[Dashboard] Starting dashboard initialization');
+        const { initializeFirebase, handleAuthState } = await import('../utils/firebaseConfig');
+        await initializeFirebase();
+        
+        console.log('[Dashboard] Checking auth state');
+        const user = await handleAuthState(false);
+        if (!user) {
+          console.log('[Dashboard] No user found, waiting for redirect');
+          return;
+        }
+        
+        console.log('[Dashboard] Loading user data');
         const data = await dataService.getUserData();
         if (data) {
+          console.log('[Dashboard] User data loaded successfully');
           setUserData(data);
-        } else {
-          window.location.href = '/login';
         }
       } catch (err) {
-        console.error('Error loading user data:', err);
+        console.error('[Dashboard] Error in dashboard initialization:', {
+          message: err.message,
+          code: err.code,
+          stack: err.stack
+        });
         setError('Failed to load dashboard data. Please try refreshing the page.');
       } finally {
         setLoading(false);
@@ -60,10 +74,13 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
+      setLoading(true);
       await dataService.signOut();
-      window.location.href = '/login';
+      // signOut method now handles the redirect
     } catch (error) {
       console.error('Error signing out:', error);
+      setError('Failed to sign out. Please try again.');
+      setLoading(false);
     }
   };
 

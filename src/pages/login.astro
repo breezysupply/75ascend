@@ -1,10 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Login from '../components/Login';
-import { initializeApp } from '../utils/firebaseConfig';
-
-// Initialize Firebase
-initializeApp();
 ---
 
 <Layout title="Login - 75 ASCEND">
@@ -12,35 +8,10 @@ initializeApp();
 </Layout>
 
 <script>
-  // Check if user is already authenticated
   const isDevelopment = import.meta.env.DEV || process.env.NODE_ENV === 'development';
   
   if (!isDevelopment) {
-    // Use Firebase Auth instead of Amplify
-    const { getAuth, onAuthStateChanged } = await import('firebase/auth');
-    const { initializeApp } = await import('firebase/app');
-    
-    // Your Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyAUx_UgOzsZRttMjAXwNYMv65_-35lCwLk",
-      authDomain: "ascend-bd295.firebaseapp.com",
-      projectId: "ascend-bd295",
-      storageBucket: "ascend-bd295.firebasestorage.app",
-      messagingSenderId: "764804246454",
-      appId: "1:764804246454:web:b683e9863247c89d772f17",
-      measurementId: "G-S6HFJSWCG3"
-    };
-    
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    
-    // Check auth state
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // User is signed in, redirect to home page
-        window.location.href = '/';
-      }
-    });
+    const { handleAuthState } = await import('../utils/firebaseConfig');
+    handleAuthState(true);
   }
 </script> 

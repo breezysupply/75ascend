@@ -20,67 +20,209 @@ const firebaseConfig = {
   measurementId: "G-S6HFJSWCG3"
 };
 
-// Firebase instances
 let app;
 let auth;
 let db;
 let googleAuthProvider;
 
+// Add a delay utility
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Add debug logging utility
+const logDebug = (message, data = null) => {
+  console.log(`[Firebase Debug] ${message}`, data || '');
+};
+
+// Add error logging utility
+const logError = (message, error) => {
+  console.error(`[Firebase Error] ${message}:`, error);
+  console.error('Stack trace:', error.stack);
+};
+
 // Initialize Firebase
-export async function initializeApp() {
-  if (typeof window === 'undefined') return; // Skip on server-side
-
+export async function initializeFirebase() {
+  if (typeof window === 'undefined') {
+    logDebug('Skipping Firebase init - server side');
+    return null;
+  }
+  
   try {
-    const { initializeApp } = await import('firebase/app');
-    const { getAuth, GoogleAuthProvider } = await import('firebase/auth');
+    logDebug('Starting Firebase initialization');
+    const { initializeApp, getApps } = await import('firebase/app');
+    const { getAuth } = await import('firebase/auth');
     const { getFirestore } = await import('firebase/firestore');
-
-    // Only initialize if not already initialized
-    if (!app) {
+    
+    if (!getApps().length) {
+      logDebug('No existing Firebase apps, initializing new app');
       app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-      googleAuthProvider = new GoogleAuthProvider();
+    } else {
+      logDebug('Using existing Firebase app');
+      app = getApps()[0];
     }
-
+    
+    if (!auth) {
+      logDebug('Initializing auth');
+      auth = getAuth(app);
+    }
+    if (!db) {
+      logDebug('Initializing Firestore');
+      db = getFirestore(app);
+    }
+    
+    logDebug('Firebase initialization complete', { 
+      hasAuth: !!auth, 
+      hasDb: !!db,
+      currentUser: auth?.currentUser?.uid 
+    });
+    
     return { app, auth, db };
   } catch (error) {
-    console.error('Error initializing Firebase:', error);
+    logError('Firebase initialization failed', error);
     throw error;
+  }
+}
+
+// Update waitForAuthInit to handle the auth state more reliably
+export function waitForAuthInit() {
+  return new Promise((resolve) => {
+    if (!auth) {
+      initializeFirebase().then(() => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          unsubscribe();
+          resolve(user);
+        });
+      });
+    } else {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        unsubscribe();
+        resolve(user);
+      });
+    }
+  });
+}
+
+// Update handleAuthState to be more robust
+export async function handleAuthState(isLoginPage = false) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    logDebug('Starting auth state check', { isLoginPage });
+    await initializeFirebase();
+    const { getAuth } = await import('firebase/auth');
+    const auth = getAuth();
+    
+    const currentPath = window.location.pathname;
+    logDebug('Current path', currentPath);
+    
+    return new Promise((resolve) => {
+      let handled = false;
+      
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        logDebug('Auth state changed', { 
+          hasUser: !!user, 
+          userId: user?.uid,
+          handled 
+        });
+        
+        if (handled) return;
+        handled = true;
+        unsubscribe();
+
+        if (user && isLoginPage) {
+          logDebug('Authenticated user on login page, redirecting to home');
+          window.location.replace('/');
+        } else if (!user && !isLoginPage) {
+          logDebug('Unauthenticated user on protected page, redirecting to login');
+          window.location.replace('/login');
+        }
+        resolve(user);
+      });
+
+      // Add timeout
+      setTimeout(() => {
+        if (!handled) {
+          logDebug('Auth state check timed out');
+          handled = true;
+          unsubscribe();
+          resolve(null);
+        }
+      }, 5000);
+    });
+  } catch (error) {
+    logError('Auth state handling failed', error);
+    return null;
   }
 }
 
 // Authentication and data service
 export const dataService = {
-  getCurrentUser: () => {
-    if (typeof window === 'undefined') return null;
-    return auth?.currentUser || null;
+  getCurrentUser: async () => {
+    await initializeFirebase();
+    const { getAuth } = await import('firebase/auth');
+    const auth = getAuth();
+    return auth.currentUser;
   },
 
   signIn: async () => {
-    const { signInWithPopup } = await import('firebase/auth');
-    if (!auth || !googleAuthProvider) await initializeApp();
-    return signInWithPopup(auth, googleAuthProvider);
+    try {
+      logDebug('Starting sign in process');
+      await initializeFirebase();
+      const { GoogleAuthProvider, signInWithPopup, getAuth } = await import('firebase/auth');
+      auth = getAuth();
+      
+      if (!googleAuthProvider) {
+        logDebug('Creating new GoogleAuthProvider');
+        googleAuthProvider = new GoogleAuthProvider();
+        googleAuthProvider.setCustomParameters({
+          prompt: 'select_account'
+        });
+      }
+      
+      logDebug('Initiating popup sign in');
+      const result = await signInWithPopup(auth, googleAuthProvider);
+      logDebug('Sign in successful', { userId: result.user.uid });
+      return result;
+    } catch (error) {
+      logError('Sign in failed', error);
+      throw error;
+    }
   },
 
   signOut: async () => {
-    const { signOut } = await import('firebase/auth');
-    if (!auth) await initializeApp();
-    return signOut(auth);
+    try {
+      logDebug('Starting sign out process');
+      await initializeFirebase();
+      const { getAuth } = await import('firebase/auth');
+      auth = getAuth();
+      await auth.signOut();
+      
+      logDebug('Clearing Firebase instances');
+      app = null;
+      auth = null;
+      db = null;
+      googleAuthProvider = null;
+      
+      logDebug('Redirecting to login page');
+      window.location.replace('/login');
+      return true;
+    } catch (error) {
+      logError('Sign out failed', error);
+      throw error;
+    }
   },
 
   getUserData: async () => {
-    if (!auth?.currentUser) return null;
-    
     try {
+      await initializeFirebase();
+      if (!auth?.currentUser) return null;
+      
       const { doc, getDoc } = await import('firebase/firestore');
       const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
       
       if (userDoc.exists()) {
-        return userDoc.data();
+        return userDoc.data().userData;
       }
       
-      // Return default data for new users
       return {
         currentDay: 1,
         startDate: new Date().toISOString(),
@@ -102,7 +244,7 @@ export const dataService = {
         return true;
       }
       
-      await initializeApp();
+      await initializeFirebase();
       
       // Get the current user
       const user = await dataService.getCurrentUser();
@@ -111,7 +253,7 @@ export const dataService = {
       }
       
       // Save the data to Firestore
-      const { setDoc, doc } = await import('firebase/firestore');
+      const { doc, setDoc } = await import('firebase/firestore');
       const userDocRef = doc(db, 'users', user.uid);
       await setDoc(userDocRef, { userData: data }, { merge: true });
       
